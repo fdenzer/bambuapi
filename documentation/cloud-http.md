@@ -17,7 +17,7 @@ All requests (except to the token refresh endpoint) must be made by presenting a
 **Request**
 
 Either login with password OR verification code, not both
-```json
+```ecmascript
 {
     "account": "<EMAIL>",
     "password":"<PASSWORD>",
@@ -28,7 +28,7 @@ Either login with password OR verification code, not both
 **Response**
 
 Here you grab the `accessToken` and `refreshToken` from the body of the response. They're usually valid for about 3 months.
-```json
+```ecmascript
 {
 	"accessToken": "[REMOVED]",
 	"refreshToken": "[REMOVED]", // same as token
@@ -45,7 +45,7 @@ Request bodies must be empty for GET requests, and otherwise valid JSON
 ## Responses
 
 Error responses tend to follow the following format. As do success messages for **/v1/iot-service/...**
-```json
+```ecmascript
 {
 	"message": "success", // "success" on success, otherwise error message, may be missing
 	"code": null, // Error code, integer on error
@@ -65,7 +65,7 @@ Returns list of messages, looks like a pretty bare Elasticsearch response.
 Can take the optional query parameters `type`, `after` and `limit`.
 
 **Response**
-```json
+```ecmascript
 {
 	"hits": [
 		{
@@ -103,7 +103,7 @@ Returns list of tasks, looks like a pretty bare Elasticsearch response.
 Can take the optional query parameters `deviceId`, `after` and `limit`.
 
 **Response**
-```json
+```ecmascript
 {
 	"total": 5,
 	"hits": [
@@ -146,14 +146,14 @@ Returns a ticket, probably means support tickets. Don't have any to test.
 Send a valid `refreshToken` and get new tokens with new expiration times.
 
 **Request**
-```json
+```ecmascript
 {
 	"refreshToken": "{REFRESH_TOKEN}"
 }
 ```
 
 **Response**
-```json
+```ecmascript
 {
 	"accessToken": "[REMOVED]",
 	"refreshToken": "[REMOVED]",
@@ -169,7 +169,7 @@ Fetches your user account preferences and information. Also is a mirror for `htt
 Useful for numeric `uid`, which when prefixed with `u_` acts as your cloud mqtt username, as this is no longer provided within access tokens.
 
 **Response**
-```json
+```ecmascript
 {
     "uid": 0000000000, // [REMOVED]
     "name": "name", // [REMOVED]
@@ -195,7 +195,7 @@ Known types (with example version) are:
 - `slicer/plugins/cloud=01.01.00.00`
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -225,7 +225,7 @@ Known types (with example version) are:
 Returns a list of possible slicer profiles (`print`, `printer` and `material`) to query.
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -314,7 +314,7 @@ Returns a list of possible slicer profiles (`print`, `printer` and `material`) t
 Gets the full data of a slicer setting by its id.
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -353,7 +353,7 @@ Gets the full data of a slicer setting by its id.
 This lists devices "bound" to the current user. As in, all your devices.
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -377,7 +377,7 @@ This lists devices "bound" to the current user. As in, all your devices.
 This is to update device info. Likely only the name.
 
 **Request**
-```json
+```ecmascript
 {
 	"dev_id": "{DEVICE_ID}",
 	...
@@ -385,7 +385,7 @@ This is to update device info. Likely only the name.
 ```
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -398,7 +398,7 @@ This is to update device info. Likely only the name.
 Queries information about firmware version and updates for a device.
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -432,7 +432,7 @@ This accepts the optional query parameter `force`, which the slicer always sets 
 The response is the current status of the printer.
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -464,7 +464,7 @@ The response is the current status of the printer.
 
 Queries the details of a profile for a certain model, likely for profile deviations?
 
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -549,7 +549,7 @@ Queries the details of a profile for a certain model, likely for profile deviati
 Queries a list of projects for the current user.
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -575,7 +575,7 @@ Queries a list of projects for the current user.
 Gets full details about a single project.
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
@@ -673,7 +673,7 @@ Gets full details about a single project.
 Gets information about a task. So far this has always yielded a 403 even on my own tasks.
 
 **Response**
-```json
+```json5
 {
 	"message": "permission denied",
 	"code": 8,
@@ -701,14 +701,14 @@ Gets information about a task. So far this has always yielded a 403 even on my o
 Gets the TTCode for the printer. This is used for authentication to the webcam stream.
 
 **Request**
-```json
+```json5
 {
 	"dev_id": "{DEVICE_ID}"
 }
 ```
 
 **Response**
-```json
+```ecmascript
 {
 	"message": "success",
 	"code": null,
