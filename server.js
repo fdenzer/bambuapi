@@ -2,6 +2,7 @@
 // Dieses Backend stellt eine sichere Verbindung zur Bambu Lab Cloud API her
 // und bietet HTTP-Endpunkte für Login und Druckerstatus für Ihre Frontend-Anwendung.
 
+require('dotenv').config()
 const express = require('express')
 const fetch = require('node-fetch')
 const session = require('express-session')
@@ -18,7 +19,7 @@ const BAMBU_API_BASE_URL = 'https://api.bambulab.com'
 //   mehrere Server-Instanzen betreiben oder Sessions über Server-Neustarts hinweg beibehalten möchten.
 //   Für eine einzelne Server-Instanz, die bei Neustart den Login erfordert, reicht der MemoryStore.
 app.use(session({
-  secret: 'your_super_secret_key_for_sessions', // ERSETZEN SIE DIES IN PRODUKTION!
+  secret: process.env.SESSION_SECRET || 'fallback-secret-for-development',
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -32,12 +33,13 @@ app.use(express.json())
 
 // Express.js Middleware für CORS
 app.use((req, res, next) => {
-  // Wenn Sie sessions/cookies über verschiedene Origins hinweg verwenden,
-  // müssen Sie 'Access-Control-Allow-Origin' auf die spezifische Frontend-Domain setzen.
-  // Für GitHub Pages von fdenzer:
-  res.header('Access-Control-Allow-Origin', 'https://fdenzer.github.io') // Spezifische Frontend-Domain
-  res.header('Access-Control-Allow-Methods', 'GET,POST')
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
+  // Setzt 'Access-Control-Allow-Origin' dynamisch auf den Origin-Header der Anfrage,
+  // um CORS für die aufrufende Domain zu erlauben (z.B. für GitHub Pages von fdenzer).
+  // Falls kein Origin-Header vorhanden ist, wird ein Standard-Origin gesetzt.
+  const allowedOrigin = req.headers.origin;
+  res.header('Access-Control-Allow-Origin', allowedOrigin || 'https://fdenzer.github.io');
+  res.header('Access-Control-Allow-Methods', 'GET,POST');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   res.header('Access-Control-Allow-Credentials', 'true') // Erlaubt das Senden von Cookies/Session-IDs
   next()
 })

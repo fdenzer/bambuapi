@@ -17,6 +17,7 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
+    "dotenv": "^17.0.0",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
     "node-fetch": "^2.7.0"
