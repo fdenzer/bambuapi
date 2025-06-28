@@ -4,539 +4,168 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bambu Lab Druckerstatus</title>
+    <!-- Preload critical resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"></noscript>
+    
+    <!-- Load Tailwind CSS synchronously to prevent FOUC -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Load our styles asynchronously -->
+    <link rel="preload" href="/static/css/styles.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/static/css/styles.css"></noscript>
+    
+    <!-- Theme management -->
     <script>
-        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
-        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-          document.documentElement.classList.add('dark')
-        } else {
-          document.documentElement.classList.remove('dark')
-        }
-
-        // Optional: Listen for changes in OS preference
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-            if (event.matches) {
+        // Apply theme immediately to prevent FOUC
+        (function() {
+            // Check for saved theme preference or use system preference
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
                 document.documentElement.classList.add('dark');
-                localStorage.theme = 'dark'; // Optionally save preference
             } else {
                 document.documentElement.classList.remove('dark');
-                localStorage.theme = 'light'; // Optionally save preference
             }
-        });
+            
+            // Listen for system theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                const newTheme = e.matches ? 'dark' : 'light';
+                if (!localStorage.getItem('theme')) {
+                    document.documentElement.classList.toggle('dark', e.matches);
+                }
+            });
+            
+            // Function to toggle theme
+            window.toggleTheme = function() {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            };
+        })();
     </script>
-    <style>
-        html {
-            /* Light theme (default) variables */
-            --color-page-bg: #f0f2f5;
-            --color-container-bg: #ffffff;
-            --color-container-border: #e2e8f0;
-            --color-text-default: #334155; /* Base text color */
-            --color-text-muted: #64748b;   /* Lighter text for details, placeholders */
-            --color-status-text: #334155;
-            --color-detail-text: #64748b;
-            --color-button-bg: #0d9488;
-            --color-button-text: white;
-            --color-button-hover-bg: #0f766e;
-            --color-button-secondary-bg: #64748b;
-            --color-button-secondary-text: white;
-            --color-button-secondary-hover-bg: #475569; /* Example hover, adjust as needed */
-            --color-input-border: #cbd5e1;
-            --color-input-bg: #ffffff; /* Default input background */
-            --color-input-text: #334155; /* Default input text color */
-            --color-shadow: rgba(0, 0, 0, 0.1);
-
-            --color-msgbox-default-bg: #fefcbf;
-            --color-msgbox-default-text: #8a6502;
-            --color-msgbox-default-border: #fcd34d;
-            --color-msgbox-error-bg: #fee2e2;
-            --color-msgbox-error-text: #991b1b;
-            --color-msgbox-error-border: #ef4444;
-            --color-msgbox-success-bg: #d1fae5;
-            --color-msgbox-success-text: #065f46;
-            --color-msgbox-success-border: #34d399;
-            --color-msgbox-info-bg: #dbeafe;
-            --color-msgbox-info-text: #1e40af;
-            --color-msgbox-info-border: #3b82f6;
-        }
-
-        html.dark {
-            --color-page-bg: #111827; /* Gray 900 */
-            --color-container-bg: #1f2937; /* Gray 800 */
-            --color-container-border: #374151; /* Gray 700 */
-            --color-text-default: #e5e7eb; /* Gray 200 */
-            --color-text-muted: #9ca3af; /* Gray 400 */
-            --color-status-text: #e5e7eb; /* Gray 200 */
-            --color-detail-text: #9ca3af; /* Gray 400 */
-            --color-button-bg: #14b8a6; /* Teal 500 */
-            --color-button-text: #ffffff;
-            --color-button-hover-bg: #0d9488; /* Teal 600 */
-            --color-button-secondary-bg: #4b5563; /* Gray 600 */
-            --color-button-secondary-text: #ffffff;
-            --color-button-secondary-hover-bg: #374151; /* Gray 700 */
-            --color-input-border: #4b5563; /* Gray 600 */
-            --color-input-bg: #374151; /* Gray 700 */
-            --color-input-text: #f3f4f6; /* Gray 100 */
-            --color-shadow: rgba(0, 0, 0, 0.4);
-
-            --color-msgbox-default-bg: #3f3f46; /* Zinc 700 */
-            --color-msgbox-default-text: #fde047; /* Yellow 400 */
-            --color-msgbox-default-border: #facc15; /* Yellow 500 */
-            --color-msgbox-error-bg: #450a0a; /* Red 900 */
-            --color-msgbox-error-text: #fca5a5; /* Red 300 */
-            --color-msgbox-error-border: #dc2626; /* Red 600 */
-            --color-msgbox-success-bg: #064e3b; /* Green 900 */
-            --color-msgbox-success-text: #6ee7b7; /* Green 300 */
-            --color-msgbox-success-border: #10b981; /* Green 500 */
-            --color-msgbox-info-bg: #1e3a8a; /* Blue 900 */
-            --color-msgbox-info-text: #93c5fd; /* Blue 300 */
-            --color-msgbox-info-border: #2563eb; /* Blue 600 */
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--color-page-bg);
-            color: var(--color-text-default); /* Applying default text color */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .container {
-            background-color: var(--color-container-bg);
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px var(--color-shadow);
-            max-width: 500px;
-            width: 100%;
-            text-align: center;
-            border: 1px solid var(--color-container-border);
-        }
-        /* Removed unused selectors: .status-text, .detail-text, .loading-indicator */
-        .button {
-            background-color: var(--color-button-bg);
-            color: var(--color-button-text);
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            margin-top: 20px;
-            display: inline-block;
-        }
-        .button:hover {
-            background-color: var(--color-button-hover-bg);
-        }
-        .button.secondary { /* New class for the secondary button */
-            background-color: var(--color-button-secondary-bg);
-            color: var(--color-button-secondary-text);
-        }
-        .button.secondary:hover {
-            background-color: var(--color-button-secondary-hover-bg);
-        }
-        .input-field {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid var(--color-input-border);
-            background-color: var(--color-input-bg);
-            color: var(--color-input-text);
-            border-radius: 8px;
-            box-sizing: border-box;
-        }
-        .input-field::placeholder { /* Styling placeholder text */
-            color: var(--color-text-muted);
-        }
-        .message-box {
-            background-color: var(--color-msgbox-default-bg);
-            color: var(--color-msgbox-default-text);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border: 1px solid var(--color-msgbox-default-border);
-            display: none; /* Hidden by default */
-        }
-        .message-box.error {
-            background-color: var(--color-msgbox-error-bg);
-            color: var(--color-msgbox-error-text);
-            border-color: var(--color-msgbox-error-border);
-        }
-        .message-box.success {
-            background-color: var(--color-msgbox-success-bg);
-            color: var(--color-msgbox-success-text);
-            border-color: var(--color-msgbox-success-border);
-        }
-        .message-box.info {
-            background-color: var(--color-msgbox-info-bg);
-            color: var(--color-msgbox-info-text);
-            border-color: var(--color-msgbox-info-border);
-        }
-    </style>
 </head>
-<body>
-    <div class="container">
-        <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Bambu Lab Druckerstatus</h1>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <h1 class="text-3xl font-bold mb-6 text-center text-teal-600 dark:text-teal-400">Bambu Lab Druckerstatus</h1>
 
-        <div id="messageBox" class="message-box"></div>
+        <div id="messageBox" class="mb-6"></div>
 
-        <div id="loginSection">
-            <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-4">Login zur Bambu Lab Cloud</h2>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Ihre Zugangsdaten werden sicher an das Backend gesendet und dort verarbeitet.
-                Sie werden nicht direkt im Browser gespeichert.
+        <!-- Login Section -->
+        <div id="loginSection" class="card max-w-md mx-auto">
+            <h2 class="card-header">Bambu Lab Cloud Login</h2>
+            <p class="card-body-text">
+                Ihre Zugangsdaten werden sicher verarbeitet und nicht lokal gespeichert.
             </p>
-            <label for="emailInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">E-Mail-Adresse</label>
-            <input type="email" id="emailInput" class="input-field mb-4" placeholder="name@beispiel.de" required>
-            <label for="passwordInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Passwort</label>
-            <input type="password" id="passwordInput" class="input-field" placeholder="••••••••" required>
-            <button id="loginButton" class="button w-full">Anmelden und Token erhalten</button>
+            <div class="space-y-4">
+                <div>
+                    <label for="emailInput" class="label">E-Mail</label>
+                    <input type="email" id="emailInput" class="input" placeholder="name@beispiel.de" required>
+                </div>
+                <div>
+                    <label for="passwordInput" class="label">Passwort</label>
+                    <input type="password" id="passwordInput" class="input" placeholder="••••••••" required>
+                </div>
+                <button id="loginButton" class="btn btn-primary w-full" disabled>
+                    Anmelden
+                </button>
+            </div>
         </div>
 
-        <div id="verificationSection" class="hidden">
-            <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-4">Zwei-Faktor-Authentifizierung</h2>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        <!-- Printer Management Section (initially hidden) -->
+        <div id="printerManagementSection" class="hidden space-y-8">
+            <div class="card">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h2 class="card-header m-0 p-0 border-0">Druckerverwaltung</h2>
+                    <div class="flex space-x-2">
+                        <button id="validatePrintersButton" class="btn btn-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            Drucker validieren
+                        </button>
+                        <button id="refreshButton" class="btn btn-secondary">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Aktualisieren
+                        </button>
+                         <button id="logoutButton" class="btn btn-danger">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V5h10a1 1 0 100-2H3zm12.293 7.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L16.586 13H9a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                            Abmelden
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Printer Form -->
+            <div class="card">
+                <h3 class="card-header">Drucker hinzufügen</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    <div>
+                        <label for="printerSerial" class="label">Drucker-Seriennummer</label>
+                        <input type="text" id="printerSerial" class="input" placeholder="z.B. 00M00A123456" required>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Finden Sie die Seriennummer auf der Rückseite Ihres Druckers oder in der Bambu Handy App.</p>
+                    </div>
+                    <div>
+                        <label for="printerName" class="label">Anzeigename (optional)</label>
+                        <input type="text" id="printerName" class="input" placeholder="z.B. Büro-Drucker">
+                    </div>
+                    <div class="md:col-span-2 flex justify-end">
+                        <button id="addPrinterButton" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                            </svg>
+                            Hinzufügen
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Printer List -->
+            <div class="card">
+                <h3 class="card-header">Konfigurierte Drucker</h3>
+                <div id="printerList" class="mt-4 divide-y divide-gray-200 dark:divide-gray-700">
+                    <!-- Printer items will be added here dynamically -->
+                    <div class="py-4 text-center text-gray-500 dark:text-gray-400">
+                        Keine Drucker konfiguriert. Fügen Sie einen Drucker hinzu.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Printer Status -->
+            <div class="card">
+                 <h3 class="card-header">Druckerstatus</h3>
+                <div id="printerStatusContainer" class="status-grid mt-4">
+                    <!-- Printer status cards will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <div id="verificationSection" class="card max-w-md mx-auto hidden">
+            <h2 class="card-header">Zwei-Faktor-Authentifizierung</h2>
+            <p class="card-body-text">
                 Ein Verifikationscode wurde an Ihre E-Mail-Adresse gesendet.
                 Bitte geben Sie den Code ein, um die Anmeldung abzuschließen.
             </p>
-            <label for="verificationCodeInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Verifikationscode</label>
-            <input type="text" id="verificationCodeInput" class="input-field" placeholder="123456" required maxlength="6" inputmode="numeric" pattern="\d{6}">
-            <button id="verifyButton" class="button w-full">Code bestätigen</button>
-            <button id="backToLoginButton" class="button secondary w-full mt-2">Zurück zum Login</button>
+            <div class="space-y-4">
+                <label for="verificationCodeInput" class="label">Verifikationscode</label>
+                <input type="text" id="verificationCodeInput" class="input text-center tracking-[0.5em]" placeholder="_ _ _ _ _ _" required maxlength="6" inputmode="numeric" pattern="\d{6}">
+                <button id="verifyButton" class="btn btn-primary w-full">Code bestätigen</button>
+                <button id="backToLoginButton" class="btn btn-secondary w-full">Zurück zum Login</button>
+            </div>
         </div>
 
         <div id="statusSection" class="hidden">
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6">
-                <h2 class="text-xl font-semibold mb-4">Druckerstatus</h2>
-                <div id="printerSelector" class="mb-4 hidden">
-                    <label for="printerSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drucker auswählen:</label>
-                    <select id="printerSelect" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                        <!-- Options will be populated by JavaScript -->
-                    </select>
-                </div>
-                <div id="printerStatus" class="text-2xl font-bold mb-2">Wird geladen...</div>
-                <div id="printerDetails" class="text-gray-600 dark:text-gray-300"></div>
-            </div>
-            <button id="refreshButton" class="button">Aktualisieren</button>
-            <button id="logoutButton" class="button button-secondary ml-4">Abmelden</button>
+             <!-- This section might be deprecated or integrated elsewhere -->
         </div>
     </div>
 
-    <script>
-        const BACKEND_URL = 'http://localhost:3000'; // Stellen Sie sicher, dass dies dem Port Ihres Node.js-Backends entspricht
-
-        const messageBox = document.getElementById('messageBox');
-        const loginSection = document.getElementById('loginSection');
-        const verificationSection = document.getElementById('verificationSection');
-        const statusSection = document.getElementById('statusSection');
-        const emailInput = document.getElementById('emailInput');
-        const passwordInput = document.getElementById('passwordInput');
-        const loginButton = document.getElementById('loginButton');
-        const verificationCodeInput = document.getElementById('verificationCodeInput');
-        const verifyButton = document.getElementById('verifyButton');
-        const backToLoginButton = document.getElementById('backToLoginButton');
-        const printerStatusDiv = document.getElementById('printerStatus');
-        const printerDetailsDiv = document.getElementById('printerDetails');
-        const loadingIndicator = document.getElementById('loadingIndicator');
-        const refreshButton = document.getElementById('refreshButton');
-
-        let hasAttemptedLogin; // Will be set to true when login is attempted
-
-        function showMessage(message, type = 'info') {
-            messageBox.textContent = message;
-            messageBox.className = `message-box ${type}`; // Zurücksetzen der Klassen und Hinzufügen des neuen Typs
-            messageBox.style.display = 'block';
-        }
-
-        function hideMessage() {
-            messageBox.style.display = 'none';
-        }
-
-        function formatTimeFromSeconds(timestampSeconds) {
-            if (!timestampSeconds) return 'unbekannt';
-            const date = new Date(timestampSeconds * 1000); // Umwandlung in Millisekunden
-            return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
-        }
-
-        async function handleLogin() {
-            hideMessage();
-            loginButton.disabled = true;
-            loginButton.textContent = 'Melde an...';
-            hasAttemptedLogin = true; // Set flag when user attempts login
-
-            const email = emailInput.value;
-            const password = passwordInput.value;
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include', // Important for session cookies
-                    body: JSON.stringify({ email, password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    if (data.needsVerification) {
-                        // Show 2FA verification form
-                        showMessage('Verifikationscode wurde an Ihre E-Mail gesendet. Bitte geben Sie den Code ein.', 'info');
-                        loginSection.classList.add('hidden');
-                        verificationSection.classList.remove('hidden');
-                        verificationCodeInput.focus();
-                    } else {
-                        // Direct login success
-                        showMessage('Login erfolgreich! Rufe Druckerstatus ab...', 'success');
-                        loginSection.classList.add('hidden');
-                        statusSection.classList.remove('hidden');
-                        await fetchPrinterStatus();
-                    }
-                } else {
-                    showMessage(`Login fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`, 'error');
-                }
-            } catch (error) {
-                console.error('Fehler beim Login-Versuch:', error);
-                showMessage('Verbindungsfehler zum Backend. Stellen Sie sicher, dass das Backend läuft.', 'error');
-            } finally {
-                loginButton.disabled = false;
-                loginButton.textContent = 'Anmelden und Token erhalten';
-            }
-        }
-
-        async function fetchPrinterStatus(printerId = null) {
-            hideMessage();
-            loadingIndicator.style.display = 'block';
-            refreshButton.disabled = true;
-
-            try {
-                // URL mit optionalem Druckerparameter erstellen
-                let url = `${BACKEND_URL}/api/printer-status`;
-                if (printerId) {
-                    url += `?serial=${encodeURIComponent(printerId)}`;
-                }
-
-                const response = await fetch(url, {
-                    credentials: 'include' // Wichtig für Session-Cookies
-                });
-                const data = await response.json();
-
-                if (response.ok) {
-                    // Druckerauswahl anzeigen, wenn mehrere Drucker verfügbar sind
-                    if (data.available_printers && data.available_printers.length > 1) {
-                        updatePrinterSelector(data.available_printers, printerId || data.dev_id);
-                    } else {
-                        document.getElementById('printerSelector').classList.add('hidden');
-                    }
-
-                    // Statusmeldung formatieren
-                    let statusMessage = data.formatted_status || `Status: ${data.status || 'Unbekannt'}`;
-                    let detailsMessage;
-
-                    // Details basierend auf dem Druckstatus anzeigen
-                    switch(data.status) {
-                        case 'PRINTING':
-                            detailsMessage = `Druckjob: ${data.dev_name || 'Unbekannt'} (${data.progress || 0}%)<br>`;
-                            if (data.estimated_finish_time) {
-                                detailsMessage += `Voraussichtliche Fertigstellung: ${formatTimeFromSeconds(data.estimated_finish_time)}<br>`;
-                            }
-                            if (data.current_temp_nozzle !== undefined) {
-                                detailsMessage += `Düse: ${data.current_temp_nozzle}°C`;
-                                if (data.target_temp_nozzle) detailsMessage += ` / ${data.target_temp_nozzle}°C`;
-                                if (data.current_temp_bed !== undefined) {
-                                    detailsMessage += `, Bett: ${data.current_temp_bed}°C`;
-                                    if (data.target_temp_bed) detailsMessage += ` / ${data.target_temp_bed}°C`;
-                                }
-                                detailsMessage += '<br>';
-                            }
-                            if (data.filament_type) {
-                                detailsMessage += `Filament: ${data.filament_type}`;
-                            }
-                            break;
-                        case 'IDLE':
-                            detailsMessage = 'Drucker ist online und bereit.';
-                            break;
-                        case 'PAUSED':
-                            detailsMessage = 'Druck ist pausiert.';
-                            if (data.dev_name) detailsMessage = `Druckjob: ${data.dev_name} (pausiert)`;
-                            break;
-                        case 'SUCCESS':
-                            detailsMessage = 'Der letzte Druck wurde erfolgreich abgeschlossen.';
-                            break;
-                        case 'FAILED':
-                            detailsMessage = 'Ein Fehler ist aufgetreten. Bitte überprüfen Sie den Drucker.';
-                            break;
-                        default:
-                            detailsMessage = data.message || 'Keine weiteren Details verfügbar.';
-                    }
-
-                    // UI aktualisieren
-                    printerStatusDiv.textContent = statusMessage;
-                    printerDetailsDiv.innerHTML = detailsMessage;
-                    
-                    // Login-Sektion ausblenden, Status anzeigen
-                    loginSection.classList.add('hidden');
-                    statusSection.classList.remove('hidden');
-                    hasAttemptedLogin = true;
-                } else {
-                    // Fehlerbehandlung
-                    if (response.status === 404 && data.available_printers) {
-                        // Ungültige Drucker-ID, aber es gibt verfügbare Drucker
-                        updatePrinterSelector(data.available_printers);
-                        showMessage('Bitte wählen Sie einen Drucker aus der Liste aus.', 'info');
-                    } else if (response.status === 401) {
-                        // Nicht autorisiert - zurück zum Login
-                        loginSection.classList.remove('hidden');
-                        statusSection.classList.add('hidden');
-                        showMessage('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.', 'error');
-                    } else {
-                        // Andere Fehler
-                        const errorMsg = data.message || 'Unbekannter Fehler';
-                        showMessage(`Fehler: ${errorMsg}`, 'error');
-                        printerStatusDiv.textContent = 'Status nicht verfügbar';
-                        printerDetailsDiv.textContent = errorMsg;
-                    }
-                }
-            } catch (error) {
-                console.error('Fehler beim Abrufen des Druckerstatus:', error);
-                showMessage('Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.', 'error');
-                printerStatusDiv.textContent = 'Verbindungsfehler';
-                printerDetailsDiv.textContent = 'Der Server konnte nicht erreicht werden.';
-            } finally {
-                loadingIndicator.style.display = 'none';
-                refreshButton.disabled = false;
-            }
-        }
-
-        // Aktualisiert die Druckerauswahl-Dropdown-Liste
-        function updatePrinterSelector(printers, selectedId = null) {
-            const selector = document.getElementById('printerSelector');
-            const select = document.getElementById('printerSelect');
-            
-            // Dropdown leeren
-            select.innerHTML = '';
-            
-            // Optionen hinzufügen
-            printers.forEach(printer => {
-                const option = document.createElement('option');
-                option.value = printer.id;
-                option.textContent = `${printer.name} (${printer.status})`;
-                if (printer.id === selectedId) {
-                    option.selected = true;
-                    selectedPrinterId = printer.id;
-                }
-                select.appendChild(option);
-            });
-            
-            // Dropdown anzeigen
-            selector.classList.remove('hidden');
-        }
-
-        async function handleVerification() {
-            hideMessage();
-            verifyButton.disabled = true;
-            verifyButton.textContent = 'Verifiziere...';
-
-            const email = emailInput.value;
-            const verificationCode = verificationCodeInput.value;
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include', // Important for session cookies
-                    body: JSON.stringify({ email, password: passwordInput.value, verificationCode })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    showMessage('Verifikation erfolgreich! Rufe Druckerstatus ab...', 'success');
-                    verificationSection.classList.add('hidden');
-                    statusSection.classList.remove('hidden');
-                    await fetchPrinterStatus();
-                } else {
-                    showMessage(`Verifikation fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`, 'error');
-                }
-            } catch (error) {
-                console.error('Fehler bei der Verifikation:', error);
-                showMessage('Verbindungsfehler zum Backend. Stellen Sie sicher, dass das Backend läuft.', 'error');
-            } finally {
-                verifyButton.disabled = false;
-                verifyButton.textContent = 'Code bestätigen';
-            }
-        }
-
-        function backToLogin() {
-            hideMessage();
-            verificationSection.classList.add('hidden');
-            loginSection.classList.remove('hidden');
-            verificationCodeInput.value = '';
-        }
-
-        // DOM-Elemente
-        const printerSelect = document.getElementById('printerSelect');
-        let selectedPrinterId = null;
-
-        // Event Listener
-        loginButton.addEventListener('click', handleLogin);
-        verifyButton.addEventListener('click', handleVerification);
-        backToLoginButton.addEventListener('click', backToLogin);
-        logoutButton.addEventListener('click', () => {
-            // Session auf dem Server beenden
-            fetch('/api/logout', { method: 'POST', credentials: 'include' })
-                .then(() => {
-                    // Zurück zum Login-Bildschirm
-                    loginSection.classList.remove('hidden');
-                    statusSection.classList.add('hidden');
-                    document.getElementById('email').value = '';
-                    document.getElementById('password').value = '';
-                })
-                .catch(error => console.error('Fehler beim Abmelden:', error));
-        });
-
-        // Event-Listener für Druckerauswahl
-        printerSelect.addEventListener('change', (e) => {
-            selectedPrinterId = e.target.value;
-            fetchPrinterStatus(selectedPrinterId);
-        });
-
-        // Event-Listener für Aktualisieren-Button
-        refreshButton.addEventListener('click', () => fetchPrinterStatus(selectedPrinterId));
-
-        // Enter key support for login form
-        emailInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                handleLogin();
-            }
-        });
-        passwordInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                handleLogin();
-            }
-        });
-        
-        // Enter key support for verification form
-        verificationCodeInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                handleVerification();
-            }
-        });
-
-        // Initialer Aufruf beim Laden der Seite: Versucht, den Status abzurufen,
-        // was fehlschlägt, wenn kein Token in der Session vorhanden ist und zum Login auffordert.
-        window.onload = async () => {
-            try {
-                await fetchPrinterStatus();
-            } catch (error) {
-                console.error('Error fetching printer status:', error);
-                loginSection.classList.remove('hidden');
-            }
-        };</script>
+    <!-- Load the main JavaScript module -->
+    <script type="module" src="/static/js/client.mjs"></script>
 </body>
 </html>
