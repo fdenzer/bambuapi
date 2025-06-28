@@ -6,6 +6,8 @@ require('dotenv').config()
 const express = require('express')
 const fetch = require('node-fetch')
 const session = require('express-session')
+const fs = require('fs').promises
+const path = require('path')
 const app = express()
 const port = 3000
 
@@ -217,6 +219,187 @@ app.post('/api/logout', (req, res) => {
   });
 });
 
+/**
+ * Lädt die gespeicherte Druckerliste oder gibt leere Liste zurück
+ * @returns {Promise<Array>} Liste der gespeicherten Drucker
+ */
+async function loadPrinterList() {
+  try {
+    const data = await fs.readFile(path.join(__dirname, 'printers.json'), 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    // Datei existiert nicht oder ist nicht lesbar - leere Liste zurückgeben
+    return [];
+  }
+}
+
+/**
+ * Speichert die Druckerliste
+ * @param {Array} printers - Liste der Drucker
+ */
+async function savePrinterList(printers) {
+  await fs.writeFile(path.join(__dirname, 'printers.json'), JSON.stringify(printers, null, 2));
+}
+
+// HTTP GET Endpunkt zum Abrufen der konfigurierten Drucker
+app.get('/api/printers', async (req, res) => {
+  try {
+    const printers = await loadPrinterList();
+    res.json({ printers });
+  } catch (error) {
+    console.error('Fehler beim Laden der Druckerliste:', error);
+    res.status(500).json({ message: 'Fehler beim Laden der Druckerliste.' });
+  }
+});
+
+// HTTP POST Endpunkt zum Konfigurieren der Drucker
+app.post('/api/printers', async (req, res) => {
+  const { printers } = req.body;
+  if (!Array.isArray(printers)) {
+    return res.status(400).json({ message: 'Eine Liste von Druckerseriennummern ist erforderlich.' });
+  }
+  
+  // Validiere Druckerseriennummern
+  for (const printer of printers) {
+    if (typeof printer !== 'string' || printer.trim().length === 0) {
+      return res.status(400).json({ message: 'Alle Druckerseriennummern müssen gültige, nicht-leere Strings sein.' });
+    }
+  }
+  
+  try {
+    await savePrinterList(printers);
+    res.json({ message: 'Druckerliste erfolgreich gespeichert.', count: printers.length });
+  } catch (error) {
+    console.error('Fehler beim Speichern der Druckerliste:', error);
+    res.status(500).json({ message: 'Fehler beim Speichern der Druckerliste.' });
+  }
+});
+
+// HTTP POST Endpunkt zum Hinzufügen eines Druckers
+app.post('/api/printers/add', async (req, res) => {
+  const { serial, name } = req.body;
+  if (!serial || typeof serial !== 'string' || serial.trim().length === 0) {
+    return res.status(400).json({ message: 'Eine gültige Druckerseriennummer ist erforderlich.' });
+  }
+  
+  try {
+    const printers = await loadPrinterList();
+    
+    // Prüfen ob Drucker bereits existiert
+    const exists = printers.some(p => 
+      (typeof p === 'string' && p === serial) || 
+      (typeof p === 'object' && p.serial === serial)
+    );
+    
+    if (exists) {
+      return res.status(400).json({ message: 'Drucker mit dieser Seriennummer bereits vorhanden.' });
+    }
+    
+    // Drucker als Objekt mit Serial und optional Name hinzufügen
+    const newPrinter = name ? { serial: serial.trim(), name: name.trim() } : serial.trim();
+    printers.push(newPrinter);
+    
+    await savePrinterList(printers);
+    res.json({ message: 'Drucker erfolgreich hinzugefügt.', printer: newPrinter });
+  } catch (error) {
+    console.error('Fehler beim Hinzufügen des Druckers:', error);
+    res.status(500).json({ message: 'Fehler beim Hinzufügen des Druckers.' });
+  }
+});
+
+// HTTP DELETE Endpunkt zum Entfernen eines Druckers
+app.delete('/api/printers/:serial', async (req, res) => {
+  const { serial } = req.params;
+  if (!serial) {
+    return res.status(400).json({ message: 'Druckerseriennummer ist erforderlich.' });
+  }
+  
+  try {
+    const printers = await loadPrinterList();
+    const initialLength = printers.length;
+    
+    // Entferne Drucker mit der angegebenen Seriennummer
+    const filteredPrinters = printers.filter(p => 
+      !((typeof p === 'string' && p === serial) || 
+        (typeof p === 'object' && p.serial === serial))
+    );
+    
+    if (filteredPrinters.length === initialLength) {
+      return res.status(404).json({ message: 'Drucker mit dieser Seriennummer nicht gefunden.' });
+    }
+    
+    await savePrinterList(filteredPrinters);
+    res.json({ message: 'Drucker erfolgreich entfernt.' });
+  } catch (error) {
+    console.error('Fehler beim Entfernen des Druckers:', error);
+    res.status(500).json({ message: 'Fehler beim Entfernen des Druckers.' });
+  }
+});
+
+// HTTP POST Endpunkt zum Validieren von Druckern gegen Bambu Lab API
+app.post('/api/printers/validate', async (req, res) => {
+  const accessToken = req.session.accessToken;
+  if (!accessToken) {
+    return res.status(401).json({ message: 'Kein Access Token verfügbar. Bitte zuerst anmelden.' });
+  }
+  
+  try {
+    // Hole verfügbare Drucker von der Bambu Lab API
+    const response = await fetch(`${BAMBU_API_BASE_URL}/v1/iot-service/api/user/bind`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      return res.status(response.status).json({ message: 'Fehler beim Abrufen der Drucker von Bambu Lab.' });
+    }
+    
+    const data = await response.json();
+    const availableDevices = data.devices || [];
+    
+    // Lade gespeicherte Druckerliste
+    const configuredPrinters = await loadPrinterList();
+    
+    // Validiere jede konfigurierte Seriennummer
+    const validationResults = configuredPrinters.map(printer => {
+      const serial = typeof printer === 'string' ? printer : printer.serial;
+      const name = typeof printer === 'object' ? printer.name : null;
+      const device = availableDevices.find(d => d.dev_id === serial);
+      
+      return {
+        serial,
+        name,
+        valid: !!device,
+        deviceInfo: device ? {
+          name: device.name,
+          model: device.dev_product_name,
+          online: device.online,
+          status: device.print_status
+        } : null
+      };
+    });
+    
+    res.json({
+      totalConfigured: configuredPrinters.length,
+      totalAvailable: availableDevices.length,
+      validationResults,
+      availableDevices: availableDevices.map(d => ({
+        serial: d.dev_id,
+        name: d.name,
+        model: d.dev_product_name,
+        online: d.online,
+        status: d.print_status
+      }))
+    });
+  } catch (error) {
+    console.error('Fehler bei der Drucker-Validierung:', error);
+    res.status(500).json({ message: 'Fehler bei der Drucker-Validierung.' });
+  }
+});
+
 // HTTP GET Endpunkt zum Abrufen des Druckerstatus
 app.get('/api/printer-status', async (req, res) => {
   const accessToken = req.session.accessToken // Access Token aus der Session abrufen
@@ -227,6 +410,9 @@ app.get('/api/printer-status', async (req, res) => {
   }
 
   try {
+    // Lade konfigurierte Drucker
+    const configuredPrinters = await loadPrinterList();
+    
     const response = await fetch(`${BAMBU_API_BASE_URL}/v1/iot-service/api/user/print`, {
       method: 'GET',
       headers: {
@@ -254,37 +440,139 @@ app.get('/api/printer-status', async (req, res) => {
     if (!data.devices || data.devices.length === 0) {
       return res.status(404).json({ 
         message: 'Keine Drucker gefunden.',
-        help: 'Bitte stellen Sie sicher, dass Sie mindestens einen Drucker mit Ihrem Bambu Lab Konto verbunden haben.'
+        help: 'Bitte stellen Sie sicher, dass Sie mindestens einen Drucker mit Ihrem Bambu Lab Konto verbunden haben.',
+        configuredPrinters: configuredPrinters.length
       })
     }
 
     let printer;
+    let printerConfig = null;
+    
     if (printerSerial) {
+      // Suche spezifischen Drucker
       printer = data.devices.find(d => d.dev_id === printerSerial)
       if (!printer) {
         return res.status(404).json({ 
           message: 'Drucker nicht gefunden.',
-          help: 'Bitte überprüfen Sie die Seriennummer des Druckers.'
+          help: 'Bitte überprüfen Sie die Seriennummer des Druckers.',
+          requestedSerial: printerSerial,
+          availableDevices: data.devices.map(d => d.dev_id)
         })
       }
+      // Finde Konfiguration für diesen Drucker
+      printerConfig = configuredPrinters.find(p => 
+        (typeof p === 'string' && p === printerSerial) ||
+        (typeof p === 'object' && p.serial === printerSerial)
+      );
+    } else if (configuredPrinters.length > 0) {
+      // Bevorzuge konfigurierten Drucker wenn keine spezielle Seriennummer angegeben
+      for (const configPrinter of configuredPrinters) {
+        const serial = typeof configPrinter === 'string' ? configPrinter : configPrinter.serial;
+        printer = data.devices.find(d => d.dev_id === serial);
+        if (printer) {
+          printerConfig = configPrinter;
+          break;
+        }
+      }
+      // Fallback auf ersten verfügbaren Drucker
+      if (!printer) {
+        printer = data.devices[0];
+      }
     } else {
+      // Keine konfigurierte Drucker, verwende ersten verfügbaren
       printer = data.devices[0]
     }
 
-    const statusMessage = printer.print_status === 'online' ? 'Der Drucker ist online und bereit zum Drucken.' : 'Der Drucker ist offline oder nicht verfügbar.'
+    // Verbesserte Statusmeldung
+    let statusMessage;
+    switch (printer.print_status?.toLowerCase()) {
+      case 'idle':
+      case 'ready':
+        statusMessage = 'Der Drucker ist bereit zum Drucken.';
+        break;
+      case 'running':
+      case 'printing':
+        statusMessage = 'Der Drucker druckt gerade.';
+        break;
+      case 'paused':
+        statusMessage = 'Der Druck ist pausiert.';
+        break;
+      case 'finish':
+      case 'success':
+        statusMessage = 'Der Druck wurde erfolgreich abgeschlossen.';
+        break;
+      case 'failed':
+      case 'error':
+        statusMessage = 'Es ist ein Druckfehler aufgetreten.';
+        break;
+      case 'offline':
+        statusMessage = 'Der Drucker ist offline.';
+        break;
+      default:
+        statusMessage = printer.dev_online ? 'Der Drucker ist online.' : 'Der Drucker ist offline oder nicht verfügbar.';
+    }
+    
     const responseData = {
+      // Grundlegende Drucker-Informationen
+      serial: printer.dev_id,
+      name: printer.dev_name,
+      model: printer.dev_product_name,
+      online: printer.dev_online,
+      
+      // Status-Informationen
       status: printer.print_status,
       formatted_status: statusMessage,
-      message: printer.message || '' // Allgemeine Nachrichten
+      
+      // Druck-Informationen (falls verfügbar)
+      task_name: printer.task_name,
+      progress: printer.progress,
+      prediction: printer.prediction, // Zeit in Sekunden
+      start_time: printer.start_time,
+      
+      // Konfigurationsinformationen
+      configured: !!printerConfig,
+      config_name: typeof printerConfig === 'object' ? printerConfig.name : null,
+      
+      // Allgemeine Nachrichten
+      message: printer.message || ''
     }
-    // Füge Informationen über verfügbare Drucker hinzu, wenn mehrere vorhanden sind
-    if (data.devices.length > 1) {
-      responseData.available_printers = data.devices.map(d => ({
-        id: d.dev_id,
+    
+    // Formatiere geschätzte Restzeit
+    if (printer.prediction && printer.progress) {
+      const remainingSeconds = Math.round(printer.prediction * (100 - printer.progress) / 100);
+      if (remainingSeconds > 0) {
+        const hours = Math.floor(remainingSeconds / 3600);
+        const minutes = Math.floor((remainingSeconds % 3600) / 60);
+        responseData.estimated_finish_time = `${hours}h ${minutes}m`;
+      }
+    }
+    
+    // Füge Informationen über verfügbare Drucker hinzu
+    responseData.available_printers = data.devices.map(d => {
+      const config = configuredPrinters.find(p => 
+        (typeof p === 'string' && p === d.dev_id) ||
+        (typeof p === 'object' && p.serial === d.dev_id)
+      );
+      return {
+        serial: d.dev_id,
         name: d.dev_name,
-        status: d.print_status
-      }))
-    }
+        model: d.dev_product_name,
+        status: d.print_status,
+        online: d.dev_online,
+        configured: !!config,
+        config_name: typeof config === 'object' ? config.name : null
+      };
+    });
+    
+    // Statistiken
+    responseData.statistics = {
+      total_devices: data.devices.length,
+      configured_devices: configuredPrinters.length,
+      online_devices: data.devices.filter(d => d.dev_online).length,
+      printing_devices: data.devices.filter(d => 
+        d.print_status === 'running' || d.print_status === 'printing'
+      ).length
+    };
     
     res.json(responseData)
   } catch (error) {
