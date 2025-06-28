@@ -1,10 +1,16 @@
 {
-  "name": "bambulab-status-backend",
+  "name": "bambulab-status-app",
   "version": "1.0.0",
-  "description": "Ein Node.js Backend zur Anzeige des Bambu Lab 3D-Druckerstatus über die Cloud API.",
-  "main": "server.js",
+  "description": "Bambu Lab 3D Printer Status Dashboard - Deployable to Netlify",
+  "main": "netlify/functions/server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "netlify dev",
+    "dev": "netlify dev",
+    "build": "echo 'No build step required for static files'",
+    "install": "cd netlify/functions && npm install",
+    "netlify-dev": "netlify dev",
+    "deploy": "netlify deploy",
+    "deploy-prod": "netlify deploy --prod"
   },
   "keywords": [
     "bambulab",
@@ -12,14 +18,26 @@
     "cloud-api",
     "nodejs",
     "express",
-    "status"
+    "status",
+    "netlify",
+    "serverless"
   ],
   "author": "Your Name",
   "license": "MIT",
-  "dependencies": {
-    "dotenv": "^17.0.0",
-    "express": "^4.19.2",
-    "express-session": "^1.18.0",
-    "node-fetch": "^2.7.0"
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/bambulab-status-app.git"
+  },
+  "netlify": {
+    "build": {
+      "publish": "client_static",
+      "functions": "netlify/functions"
+    }
   }
 }

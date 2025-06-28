@@ -1,0 +1,13 @@
+{
+  "name": "bambulab-netlify-functions",
+  "version": "1.0.0",
+  "description": "Netlify Functions for Bambu Lab Status Backend",
+  "main": "server.js",
+  "dependencies": {
+    "serverless-http": "^3.2.0",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "node-fetch": "^2.7.0",
+    "dotenv": "^17.0.0"
+  }
+}

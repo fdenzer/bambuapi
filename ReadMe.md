@@ -86,7 +86,7 @@ Das Backend stellt die folgenden HTTP-Endpunkte bereit:
 - **POST /api/login**
   : **Beschreibung**
     : Meldet sich bei der Bambu Lab Cloud API an mit zweistufiger Authentifizierung. Dieser Endpunkt verarbeitet sowohl den ersten Schritt (E-Mail/Passwort) als auch den zweiten Schritt (Verifikationscode) je nach übergebenen Parametern.
-  
+
   : **Schritt 1 - Initiale Anmeldung:**
     ```json
     {
@@ -102,7 +102,7 @@ Das Backend stellt die folgenden HTTP-Endpunkte bereit:
     ```json
     { "message": "Verifikationscode wurde gesendet. Bitte geben Sie den Code ein.", "needsVerification": true }
     ```
-  
+
   : **Schritt 2 - Verifikation (falls erforderlich):**
     ```json
     {
@@ -157,3 +157,95 @@ fetch('http://localhost:3000/api/printer-status', {
   : Die Bambu Lab Access Tokens sind laut Dokumentation etwa 3 Monate gültig. Da der Refresh-Token-Endpunkt als "nutzlos" beschrieben wird, muss sich der Benutzer nach Ablauf des Tokens erneut anmelden. Die Session-Dauer (`maxAge` des Cookies) sollte dies widerspiegeln.
 - **Drucker-Auswahl:**
   : Das Backend ruft derzeit den Status des ersten in Ihrem Konto gefundenen Druckers ab. Wenn Sie mehrere Drucker haben, müssten Sie die Logik im Backend erweitern, um eine spezifische `dev_id` zu akzeptieren und den Status des entsprechenden Druckers zurückzugeben.
+
+## Netlify Deployment
+
+Diese Anwendung kann auch auf Netlify als serverlose Anwendung bereitgestellt werden. Die Projektstruktur wurde erweitert, um sowohl lokale Entwicklung als auch Netlify-Deployment zu unterstützen.
+
+### Projektstruktur für Netlify
+
+```
+bambuapi/
+├── client_static/          # Statische Frontend-Dateien (von Netlify bereitgestellt)
+│   ├── index.html          # Haupt-HTML-Datei
+│   ├── css/
+│   │   └── styles.css      # Benutzerdefinierte Styles
+│   └── js/
+│       └── client.mjs      # Frontend JavaScript-Modul
+├── server/                 # Original Express.js Server (für lokale Entwicklung)
+│   ├── server.js           # Express Server
+│   └── package.json        # Server-Abhängigkeiten
+├── netlify/
+│   └── functions/          # Netlify Serverless Functions
+│       ├── server.js       # Serverless Function Wrapper
+│       └── package.json    # Function-Abhängigkeiten
+├── netlify.toml            # Netlify-Konfiguration
+└── package.json            # Root package.json mit Deployment-Skripten
+```
+
+### Netlify Deployment-Optionen
+
+#### Option 1: Netlify CLI (Empfohlen)
+
+1. Netlify CLI global installieren:
+```bash
+npm install -g netlify-cli
+```
+
+2. Bei Netlify anmelden:
+```bash
+netlify login
+```
+
+3. Site initialisieren:
+```bash
+netlify init
+```
+
+4. Für Vorschau deployen:
+```bash
+npm run deploy
+```
+
+5. Für Produktion deployen:
+```bash
+npm run deploy-prod
+```
+
+#### Option 2: Git-Integration
+
+1. Code zu GitHub/GitLab/Bitbucket pushen
+2. Repository mit Netlify verbinden
+3. Build-Einstellungen konfigurieren:
+   - **Build command**: `echo "No build required"`
+   - **Publish directory**: `client_static`
+   - **Functions directory**: `netlify/functions`
+
+### Umgebungsvariablen für Netlify
+
+Setzen Sie diese in Ihrem Netlify Dashboard unter Site Settings > Environment Variables:
+
+- `SESSION_SECRET`: Ein sicherer zufälliger String für Session-Verschlüsselung
+
+### Funktionsweise auf Netlify
+
+- **Frontend**: Statische Dateien aus `client_static` werden direkt von Netlify bereitgestellt
+- **Backend**: Der Express.js Server wird als Netlify Function ausgeführt
+- **API-Endpunkte**: Alle `/api/*` Routen werden von der serverless Function verarbeitet
+- **Sessions**: Werden mit express-session und Memory Store verwaltet
+
+### Verfügbare NPM-Skripte
+
+```bash
+npm run install-all        # Installiert alle Abhängigkeiten
+npm run dev                # Startet lokalen Entwicklungsserver
+npm run deploy             # Deployt zu Netlify (Vorschau)
+npm run deploy-prod        # Deployt zu Netlify (Produktion)
+```
+
+### Unterschiede zwischen lokaler Entwicklung und Netlify
+
+- **Lokal**: Verwendet den Express Server direkt auf Port 3000
+- **Netlify**: Verwendet Netlify Functions (serverless) mit automatischem HTTPS
+- **Sessions**: Beide Umgebungen teilen sich dieselbe Codebase und API-Struktur
+- **CORS**: Automatisch für Netlify-Domains konfiguriert

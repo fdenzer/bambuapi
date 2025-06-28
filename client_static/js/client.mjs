@@ -15,7 +15,8 @@
  * @property {string} [message] - Status message
  */
 
-const BACKEND_URL = 'http://localhost:3000';
+// Use relative paths - Netlify will route /api/* to serverless functions
+// const BACKEND_URL = ''; // Not needed anymore
 
 // DOM Elements
 const messageBox = document.getElementById('messageBox');
@@ -50,7 +51,7 @@ export function showMessage(message, type = 'info') {
     messageBox.textContent = message;
     messageBox.className = `message-box ${type}`;
     messageBox.style.display = 'block';
-    
+
     setTimeout(() => {
         messageBox.style.display = 'none';
     }, 5000);
@@ -68,19 +69,19 @@ export function formatTimeFromSeconds(timestampSeconds) {
 // Update the printer selector dropdown
 function updatePrinterSelector(availablePrinters, selectedPrinterId) {
     if (!printerSelect) return;
-    
+
     // Save the current selection
     const currentSelection = printerSelect.value;
-    
+
     // Clear existing options
     printerSelect.innerHTML = '';
-    
+
     // Add default option
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
     defaultOption.textContent = 'Alle Drucker anzeigen';
     printerSelect.appendChild(defaultOption);
-    
+
     // Add available printers
     availablePrinters.forEach(printer => {
         const option = document.createElement('option');
@@ -89,7 +90,7 @@ function updatePrinterSelector(availablePrinters, selectedPrinterId) {
         option.selected = (printer.dev_id === selectedPrinterId) || (printer.serial === selectedPrinterId);
         printerSelect.appendChild(option);
     });
-    
+
     // Show the selector if there are multiple printers
     const printerSelector = document.getElementById('printerSelector');
     if (printerSelector) {
@@ -123,7 +124,7 @@ export async function loadPrinters() {
 
 export function displayPrinters(printers) {
     if (!printerList) return;
-    
+
     if (!printers || printers.length === 0) {
         printerList.innerHTML = `
             <div class="text-center py-4 text-gray-500 dark:text-gray-400">
@@ -135,7 +136,7 @@ export function displayPrinters(printers) {
     printerList.innerHTML = printers.map(printer => {
         const serial = typeof printer === 'string' ? printer : printer.serial;
         const name = typeof printer === 'object' ? printer.name : '';
-        
+
         return `
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 flex justify-between items-center">
                 <div>
@@ -158,7 +159,7 @@ export async function fetchPrinterStatus(printerId = null) {
     if (refreshButton) refreshButton.disabled = true;
 
     try {
-        let url = `${BACKEND_URL}/api/printer-status`;
+        let url = `/api/printer-status`;
         if (printerId) {
             url += `?serial=${encodeURIComponent(printerId)}`;
         }
@@ -243,12 +244,126 @@ export async function fetchPrinterStatus(printerId = null) {
 }
 
 // Event Handlers
-export function handleLogin() {
-    // Implementation...
+export async function handleLogin() {
+    if (!emailInput || !passwordInput) return;
+
+    const email = emailInput.value.trim();
+    const password = passwordInput.value.trim();
+
+    if (!email || !password) {
+        showMessage('Bitte geben Sie E-Mail und Passwort ein.', 'error');
+        return;
+    }
+
+    if (loginButton) loginButton.disabled = true;
+    hideMessage();
+
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                email: email,
+                password: password
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.needsVerification) {
+                // Show verification section
+                if (loginSection) loginSection.classList.add('hidden');
+                if (verificationSection) verificationSection.classList.remove('hidden');
+                showMessage(data.message || 'Verifikationscode wurde gesendet.', 'info');
+
+                // Store tfaKey for verification
+                if (verificationSection) {
+                    verificationSection.dataset.tfaKey = data.tfaKey || '';
+                    verificationSection.dataset.email = email;
+                    verificationSection.dataset.password = password;
+                }
+            } else {
+                // Login successful
+                showMessage(data.message || 'Login erfolgreich!', 'success');
+
+                // Hide login section and show status section
+                if (loginSection) loginSection.classList.add('hidden');
+                if (statusSection) statusSection.classList.remove('hidden');
+                if (printerManagementSection) printerManagementSection.classList.remove('hidden');
+
+                // Load printers and fetch status
+                await loadPrinters();
+            }
+        } else {
+            showMessage(data.message || 'Login fehlgeschlagen.', 'error');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        showMessage('Verbindungsfehler beim Login.', 'error');
+    } finally {
+        if (loginButton) loginButton.disabled = false;
+    }
 }
 
-export function handleVerification() {
-    // Implementation...
+export async function handleVerification() {
+    if (!verificationCodeInput || !verificationSection) return;
+
+    const verificationCode = verificationCodeInput.value.trim();
+    const tfaKey = verificationSection.dataset.tfaKey || '';
+    const email = verificationSection.dataset.email || '';
+    const password = verificationSection.dataset.password || '';
+
+    if (!verificationCode) {
+        showMessage('Bitte geben Sie den Verifikationscode ein.', 'error');
+        return;
+    }
+
+    if (verifyButton) verifyButton.disabled = true;
+    hideMessage();
+
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                email: email,
+                password: password,
+                verificationCode: verificationCode,
+                tfaKey: tfaKey
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showMessage(data.message || 'Verifikation erfolgreich!', 'success');
+
+            // Hide verification section and show status section
+            if (verificationSection) verificationSection.classList.add('hidden');
+            if (statusSection) statusSection.classList.remove('hidden');
+            if (printerManagementSection) printerManagementSection.classList.remove('hidden');
+
+            // Clear verification input
+            verificationCodeInput.value = '';
+
+            // Load printers and fetch status
+            await loadPrinters();
+        } else {
+            showMessage(data.message || 'Verifikation fehlgeschlagen.', 'error');
+        }
+    } catch (error) {
+        console.error('Verification error:', error);
+        showMessage('Verbindungsfehler bei der Verifikation.', 'error');
+    } finally {
+        if (verifyButton) verifyButton.disabled = false;
+    }
 }
 
 export function backToLogin() {
@@ -260,10 +375,10 @@ export function backToLogin() {
 // Check if login form is valid and update button state
 function updateLoginButtonState() {
     if (!loginButton) return;
-    
-    const isFormValid = emailInput && emailInput.value.trim() !== '' && 
-                      passwordInput && passwordInput.value.trim() !== '';
-    
+
+    const isFormValid = emailInput && emailInput.value.trim() !== '' &&
+        passwordInput && passwordInput.value.trim() !== '';
+
     if (isFormValid) {
         loginButton.classList.remove('opacity-50', 'cursor-not-allowed');
         loginButton.disabled = false;
@@ -278,18 +393,18 @@ export function initEventListeners() {
     if (loginButton) loginButton.addEventListener('click', handleLogin);
     if (verifyButton) verifyButton.addEventListener('click', handleVerification);
     if (backToLoginButton) backToLoginButton.addEventListener('click', backToLogin);
-    
+
     // Add input event listeners for login form validation
     if (emailInput && passwordInput) {
         const validateForm = () => updateLoginButtonState();
-        
+
         emailInput.addEventListener('input', validateForm);
         passwordInput.addEventListener('input', validateForm);
-        
+
         // Also validate on paste events
         emailInput.addEventListener('paste', validateForm);
         passwordInput.addEventListener('paste', validateForm);
-        
+
         // Enter key support for login form
         emailInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !loginButton.disabled) handleLogin();
@@ -298,7 +413,7 @@ export function initEventListeners() {
             if (e.key === 'Enter' && !loginButton.disabled) handleLogin();
         });
     }
-    
+
     // Initial validation
     updateLoginButtonState();
 }
@@ -306,7 +421,7 @@ export function initEventListeners() {
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
-    
+
     // Show login section by default
     if (loginSection) loginSection.classList.remove('hidden');
     if (printerManagementSection) printerManagementSection.classList.add('hidden');
