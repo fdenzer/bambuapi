@@ -281,10 +281,15 @@ app.get('/api/printer-status', async (req, res) => {
   }
 })
 
-// Starten des Servers
-app.listen(port, () => {
-  console.log(`Bambu Lab Status Backend läuft auf http://localhost:${port}`)
-  console.log(`Login-Endpunkt: POST http://localhost:${port}/api/login`)
-  console.log(`Status-Endpunkt: GET http://localhost:${port}/api/printer-status`)
-  console.log('Der Access Token wird nun in der Session gespeichert. Bei Server-Neustart bleibt die Session bestehen, solange der Browser-Cookie gültig ist.')
-})
+// // Starten des Servers - Wird für Serverless-Betrieb nicht direkt hier aufgerufen
+// app.listen(port, () => {
+//   console.log(`Bambu Lab Status Backend läuft auf http://localhost:${port}`)
+//   console.log(`Login-Endpunkt: POST http://localhost:${port}/api/login`)
+//   console.log(`Status-Endpunkt: GET http://localhost:${port}/api/printer-status`)
+//   console.log('Der Access Token wird nun in der Session gespeichert. Bei Server-Neustart bleibt die Session bestehen, solange der Browser-Cookie gültig ist.')
+// })
+
+// Export the app for serverless environments
+module.exports = app;
+// Optional: Export für ES Modules (falls zukünftig benötigt)
+// export default app;

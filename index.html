@@ -234,7 +234,9 @@
     </div>
 
     <script>
-        const BACKEND_URL = 'http://localhost:3000'; // Stellen Sie sicher, dass dies dem Port Ihres Node.js-Backends entspricht
+        // For local development, you might use: const BACKEND_URL = 'http://localhost:3000';
+        // For Netlify deployment, the path should be relative to the function endpoint:
+        const BACKEND_URL = '/.netlify/functions/server';
 
         const messageBox = document.getElementById('messageBox');
         const loginSection = document.getElementById('loginSection');
