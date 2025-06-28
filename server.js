@@ -1,125 +1,187 @@
 // server.js - Node.js Backend für Bambu Lab Druckerstatus
-// Dieses Backend stellt eine sichere Verbindung zum Bambu Lab MQTT-Broker her
-// und bietet einen HTTP-Endpunkt für Ihre Frontend-Anwendung.
+// Dieses Backend stellt eine sichere Verbindung zur Bambu Lab Cloud API her
+// und bietet HTTP-Endpunkte für Login und Druckerstatus für Ihre Frontend-Anwendung.
 
 const express = require('express')
-const mqtt = require('mqtt')
+const fetch = require('node-fetch')
+const session = require('express-session')
 const app = express()
-const port = 3000 // Der Port, auf dem Ihr Backend läuft
+const port = 3000
 
-// Ihre Bambu Lab Druckerdaten (BITTE NICHT IM CLIENT-SEITIGEN CODE SPEICHERN!)
-// Diese sollten idealerweise aus Umgebungsvariablen oder einem sicheren Konfigurationssystem geladen werden.
-const PRINTER_SERIAL = 'IHR_DRUCKER_SERIENNUMMER' // Ersetzen Sie dies durch die Seriennummer Ihres Druckers
-const ACCESS_CODE = 'IHR_ZUGANGSCODE'           // Ersetzen Sie dies durch den Zugangscode Ihres Druckers
-const MQTT_BROKER = 'mqtts://us.mqtt.bambulab.com:8883' // Oder Ihr regionaler Broker
+const BAMBU_API_BASE_URL = 'https://api.bambulab.com'
 
-let latestPrinterStatus = null // Speichert den zuletzt empfangenen Druckerstatus
-let mqttClient = null // MQTT-Client-Instanz
+// Session-Konfiguration für express-session
+// In einer Produktionsumgebung:
+// - 'secret' sollte ein langes, zufälliges, sicheres Geheimnis sein, das aus Umgebungsvariablen geladen wird.
+// - 'resave' und 'saveUninitialized' sollten oft auf false gesetzt werden, um unnötige Session-Speicherungen zu vermeiden.
+// - 'store' sollte eine persistente Session-Speicherung (z.B. Redis, MongoDB) verwenden, wenn Sie
+//   mehrere Server-Instanzen betreiben oder Sessions über Server-Neustarts hinweg beibehalten möchten.
+//   Für eine einzelne Server-Instanz, die bei Neustart den Login erfordert, reicht der MemoryStore.
+app.use(session({
+  secret: 'your_super_secret_key_for_sessions', // ERSETZEN SIE DIES IN PRODUKTION!
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 24 // Cookie 1 Tag gültig (entspricht ca. der Token-Gültigkeit)
+    // secure: true, // Nur über HTTPS senden (für Produktion aktivieren)
+    // httpOnly: true, // Cookie nur über HTTP(S) zugänglich, nicht über Client-Side-Skripte
+  }
+}))
 
-/**
- * Stellt eine Verbindung zum MQTT Broker her und abonniert das Drucker-Topic.
- * Verwendet Promises, um den Verbindungsstatus asynchron zu handhaben.
- * @returns {Promise<void>} Eine Promise, die aufgelöst wird, wenn die Verbindung hergestellt und das Topic abonniert wurde.
- */
-async function connectMqttClient () {
-  return new Promise((resolve, reject) => {
-    mqttClient = mqtt.connect(MQTT_BROKER, {
-      clientId: PRINTER_SERIAL, // Client ID sollte die Seriennummer sein
-      username: 'bblp',         // Standard-Benutzername für Bambu Lab MQTT
-      password: ACCESS_CODE,    // Ihr Zugangscode
-      reconnectPeriod: 5000,    // Versucht alle 5 Sekunden die Verbindung wiederherzustellen
-      protocol: 'mqtts'         // Wichtig für SSL/TLS
-    })
-
-    mqttClient.on('connect', () => {
-      console.log('Verbunden mit Bambu Lab MQTT Broker')
-      mqttClient.subscribe(`device/${PRINTER_SERIAL}/report`, (err) => {
-        if (!err) {
-          console.log(`Abonniert Topic: device/${PRINTER_SERIAL}/report`)
-          resolve() // Verbindung und Abonnement erfolgreich
-        } else {
-          console.error('Fehler beim Abonnieren des Topics:', err)
-          reject(new Error('Failed to subscribe to MQTT topic.'))
-        }
-      })
-    })
-
-    mqttClient.on('message', (topic, message) => {
-      try {
-        const payload = JSON.parse(message.toString())
-        // console.log('MQTT Nachricht empfangen:', JSON.stringify(payload, null, 2)) // Zum Debuggen
-        latestPrinterStatus = payload // Speichert den gesamten Status
-      } catch (e) {
-        console.error('Fehler beim Parsen der MQTT-Nachricht:', e)
-      }
-    })
-
-    mqttClient.on('error', (err) => {
-      console.error('MQTT Fehler:', err)
-      // reject(err) // Könnte hier rejecten, wenn ein kritischer Fehler die Verbindung unbrauchbar macht
-    })
-
-    mqttClient.on('close', () => {
-      console.log('MQTT Verbindung geschlossen.')
-    })
-
-    mqttClient.on('offline', () => {
-      console.log('MQTT Client ist offline.')
-    })
-
-    mqttClient.on('reconnect', () => {
-      console.log('MQTT Client versucht, sich wieder zu verbinden...')
-    })
-  })
-}
+app.use(express.json())
 
 // Express.js Middleware für CORS
-// Dies ist wichtig, damit Ihre Frontend-Webseite (die auf einem anderen Port/Domain laufen könnte)
-// auf dieses Backend zugreifen kann.
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*') // Erlaubt Anfragen von jeder Origin (für Entwicklung)
-  // In Produktion: Ersetzen Sie '*' durch die Domain Ihrer Frontend-App
+  // Wenn Sie sessions/cookies über verschiedene Origins hinweg verwenden,
+  // müssen Sie 'Access-Control-Allow-Origin' auf die spezifische Frontend-Domain setzen.
+  // Für GitHub Pages von fdenzer:
+  res.header('Access-Control-Allow-Origin', 'https://fdenzer.github.io') // Spezifische Frontend-Domain
+  res.header('Access-Control-Allow-Methods', 'GET,POST')
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
+  res.header('Access-Control-Allow-Credentials', 'true') // Erlaubt das Senden von Cookies/Session-IDs
   next()
 })
 
-// HTTP GET Endpunkt zum Abrufen des Druckerstatus
-app.get('/api/printer-status', (req, res) => {
-  if (latestPrinterStatus) {
-    // Filtern oder formatieren Sie die Daten hier, wenn nötig
-    // Für Ihre Anforderung "druckt bis X Uhr" benötigen wir 'print_status.estimated_finish_time'
-    const responseData = {
-      state: latestPrinterStatus.print_status?.state || 'unknown',
-      progress: latestPrinterStatus.print_status?.progress || 0,
-      // 'mc_print_stage.finish_time' ist oft der genauere Timestamp für die geschätzte Endzeit
-      // 'estimated_finish_time' kann auch vorkommen
-      estimated_finish_time: latestPrinterStatus.print_status?.mc_print_stage?.finish_time || latestPrinterStatus.print_status?.estimated_finish_time || null,
-      current_temp_nozzle: latestPrinterStatus.print_status?.nozzle_temper?.current || 0,
-      target_temp_nozzle: latestPrinterStatus.print_status?.nozzle_temper?.target || 0,
-      current_temp_bed: latestPrinterStatus.print_status?.bed_temper?.current || 0,
-      target_temp_bed: latestPrinterStatus.print_status?.bed_temper?.target || 0,
-      filament_type: latestPrinterStatus.print_status?.current_ams?.tray_info?.[0]?.tray_type || 'Unknown', // Beispiel für AMS-Info
-      print_name: latestPrinterStatus.print_status?.gcode_file || 'Unbekannt',
-      message: latestPrinterStatus.print_status?.msg || '' // Allgemeine Nachrichten
-    }
-    res.json(responseData)
-  } else {
-    res.status(503).json({ message: 'Druckerstatus nicht verfügbar oder noch nicht empfangen. Bitte warten Sie auf die MQTT-Verbindung.' })
-  }
-})
-
-// Starten des Servers und der MQTT-Verbindung
-async function startServer () {
+/**
+ * Versucht, sich bei der Bambu Lab Cloud anzumelden und Tokens zu erhalten.
+ * @param {string} email - Die E-Mail-Adresse des Bambu Lab Kontos.
+ * @param {string} password - Das Passwort des Bambu Lab Kontos.
+ * @returns {Promise<string|null>} Der Access Token bei Erfolg, sonst null.
+ */
+async function loginToBambuLabCloud (email, password) {
+  console.log(`Versuche, mich bei Bambu Lab Cloud mit E-Mail: ${email} anzumelden...`)
   try {
-    await connectMqttClient()
-    app.listen(port, () => {
-      console.log(`Bambu Lab Status Backend läuft auf http://localhost:${port}`)
-      console.log(`Rufen Sie http://localhost:${port}/api/printer-status auf, um den Status zu sehen.`)
+    const response = await fetch(`${BAMBU_API_BASE_URL}/v1/user-service/user/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        account: email,
+        password: password
+      })
     })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error('Login-Fehler:', errorData.message || response.statusText)
+      return null
+    }
+
+    const data = await response.json()
+    if (data.accessToken) {
+      console.log('Login erfolgreich! Access Token erhalten.')
+      console.log(`Token gültig für: ${data.expiresIn / 3600 / 24} Tage`)
+      return data.accessToken
+    } else {
+      console.error('Login erfolgreich, aber kein Access Token in der Antwort gefunden.')
+      return null
+    }
   } catch (error) {
-    console.error('Fehler beim Starten des Servers oder der MQTT-Verbindung:', error)
-    process.exit(1) // Beendet den Prozess bei einem kritischen Fehler
+    console.error('Fehler beim Login-Versuch:', error)
+    return null
   }
 }
 
-startServer()
+// HTTP POST Endpunkt für den Login
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'E-Mail und Passwort sind erforderlich.' })
+  }
+
+  const accessToken = await loginToBambuLabCloud(email, password)
+
+  if (accessToken) {
+    req.session.accessToken = accessToken // Access Token in der Session speichern
+    res.json({ message: 'Login erfolgreich!', accessTokenAvailable: true })
+  } else {
+    res.status(401).json({ message: 'Login fehlgeschlagen. Überprüfen Sie Ihre Zugangsdaten.' })
+  }
+})
+
+// HTTP GET Endpunkt zum Abrufen des Druckerstatus
+app.get('/api/printer-status', async (req, res) => {
+  const accessToken = req.session.accessToken // Access Token aus der Session abrufen
+
+  if (!accessToken) {
+    return res.status(401).json({ message: 'Kein Access Token in der Session verfügbar. Bitte zuerst anmelden.' })
+  }
+
+  try {
+    const response = await fetch(`${BAMBU_API_BASE_URL}/v1/iot-service/api/user/print`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`, // Token aus der Session verwenden
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error('Fehler beim Abrufen des Druckerstatus:', errorData.message || response.statusText)
+      // Wenn der Token abgelaufen ist oder ungültig ist (z.B. 401 Unauthorized)
+      if (response.status === 401) {
+        console.log('Access Token ungültig/abgelaufen. Session-Token wird gelöscht.')
+        req.session.destroy((err) => { // Session zerstören
+          if (err) console.error('Fehler beim Zerstören der Session:', err)
+        })
+        return res.status(401).json({ message: 'Token abgelaufen oder ungültig. Bitte melden Sie sich erneut an.' })
+      }
+      return res.status(response.status).json({ message: errorData.message || 'Fehler beim Abrufen des Druckerstatus.' })
+    }
+
+    const data = await response.json()
+    // console.log('Druckerstatus Rohdaten:', JSON.stringify(data, null, 2)) // Zum Debuggen
+
+    if (data.devices && data.devices.length > 0) {
+      const printer = data.devices[0] // Nehmen Sie den ersten Drucker
+      let statusMessage = 'Unbekannt'
+      let estimatedFinishTime = null
+
+      // Die 'prediction' ist die verbleibende Zeit in Sekunden
+      if (printer.print_status === 'PRINTING' && typeof printer.prediction === 'number') {
+        const finishTimestampSeconds = Math.floor(Date.now() / 1000) + printer.prediction
+        estimatedFinishTime = finishTimestampSeconds
+        statusMessage = `Druckt bis ${new Date(finishTimestampSeconds * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`
+      } else if (printer.print_status === 'SUCCESS') {
+        statusMessage = 'Druck abgeschlossen'
+      } else if (printer.print_status === 'IDLE') {
+        statusMessage = 'Bereit zum Drucken'
+      } else if (printer.print_status === 'PAUSED') {
+        statusMessage = 'Druck pausiert'
+      } else if (printer.print_status === 'FAILED') {
+        statusMessage = 'Druck fehlgeschlagen'
+      } else {
+        statusMessage = `Status: ${printer.print_status || 'Unbekannt'}`
+      }
+
+      const responseData = {
+        dev_id: printer.dev_id,
+        dev_name: printer.dev_name,
+        online: printer.dev_online,
+        print_status: printer.print_status,
+        progress: printer.progress, // Kann null sein, wenn nicht gedruckt wird
+        prediction_seconds: printer.prediction, // Verbleibende Zeit in Sekunden
+        estimated_finish_time: estimatedFinishTime, // Timestamp in Sekunden
+        formatted_status: statusMessage,
+        message: printer.message || '' // Allgemeine Nachrichten
+      }
+      res.json(responseData)
+    } else {
+      res.status(404).json({ message: 'Keine Drucker gefunden oder Status nicht verfügbar.' })
+    }
+  } catch (error) {
+    console.error('Backend-Fehler beim Abrufen des Druckerstatus:', error)
+    res.status(500).json({ message: 'Interner Serverfehler beim Abrufen des Druckerstatus.' })
+  }
+})
+
+// Starten des Servers
+app.listen(port, () => {
+  console.log(`Bambu Lab Status Backend läuft auf http://localhost:${port}`)
+  console.log(`Login-Endpunkt: POST http://localhost:${port}/api/login`)
+  console.log(`Status-Endpunkt: GET http://localhost:${port}/api/printer-status`)
+  console.log('Der Access Token wird nun in der Session gespeichert. Bei Server-Neustart bleibt die Session bestehen, solange der Browser-Cookie gültig ist.')
+})

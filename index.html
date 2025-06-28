@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bambu Lab Druckerstatus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+        .status-text {
+            font-size: 1.875rem; /* 30px */
+            font-weight: 700;
+            color: #334155; /* Slate 700 */
+            margin-bottom: 20px;
+        }
+        .detail-text {
+            font-size: 1.125rem; /* 18px */
+            color: #64748b; /* Slate 500 */
+            margin-bottom: 10px;
+        }
+        .loading-indicator {
+            display: none; /* Standardmäßig versteckt */
+            color: #64748b;
+            font-style: italic;
+            margin-top: 10px;
+        }
+        .button {
+            background-color: #0d9488; /* Teal 600 */
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+            display: inline-block;
+        }
+        .button:hover {
+            background-color: #0f766e; /* Teal 700 */
+        }
+        .input-field {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #cbd5e1; /* Slate 300 */
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        .message-box {
+            background-color: #fefcbf; /* Yellow 100 */
+            color: #8a6502; /* Yellow 800 */
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #fcd34d; /* Yellow 400 */
+            display: none; /* Hidden by default */
+        }
+        .message-box.error {
+            background-color: #fee2e2; /* Red 100 */
+            color: #991b1b; /* Red 800 */
+            border-color: #ef4444; /* Red 500 */
+        }
+        .message-box.success {
+            background-color: #d1fae5; /* Green 100 */
+            color: #065f46; /* Green 800 */
+            border-color: #34d399; /* Green 400 */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Bambu Lab Druckerstatus</h1>
+
+        <div id="messageBox" class="message-box"></div>
+
+        <div id="loginSection">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Login zur Bambu Lab Cloud</h2>
+            <p class="text-sm text-gray-600 mb-4">
+                Ihre Zugangsdaten werden sicher an das Backend gesendet und dort verarbeitet.
+                Sie werden nicht direkt im Browser gespeichert.
+            </p>
+            <input type="email" id="emailInput" class="input-field" placeholder="E-Mail-Adresse" required>
+            <input type="password" id="passwordInput" class="input-field" placeholder="Passwort" required>
+            <button id="loginButton" class="button w-full">Anmelden und Token erhalten</button>
+        </div>
+
+        <div id="statusSection" class="hidden">
+            <div id="printerStatus" class="status-text">
+                Lade Status...
+            </div>
+            <div id="printerDetails" class="detail-text">
+                </div>
+            <div id="loadingIndicator" class="loading-indicator">
+                Aktualisiere Status...
+            </div>
+            <button id="refreshButton" class="button">Status aktualisieren</button>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://localhost:3000'; // Stellen Sie sicher, dass dies dem Port Ihres Node.js-Backends entspricht
+
+        const messageBox = document.getElementById('messageBox');
+        const loginSection = document.getElementById('loginSection');
+        const statusSection = document.getElementById('statusSection');
+        const emailInput = document.getElementById('emailInput');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginButton = document.getElementById('loginButton');
+        const printerStatusDiv = document.getElementById('printerStatus');
+        const printerDetailsDiv = document.getElementById('printerDetails');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const refreshButton = document.getElementById('refreshButton');
+
+        function showMessage(message, type = 'info') {
+            messageBox.textContent = message;
+            messageBox.className = `message-box ${type}`; // Zurücksetzen der Klassen und Hinzufügen des neuen Typs
+            messageBox.style.display = 'block';
+        }
+
+        function hideMessage() {
+            messageBox.style.display = 'none';
+        }
+
+        function formatTimeFromSeconds(timestampSeconds) {
+            if (!timestampSeconds) return 'unbekannt';
+            const date = new Date(timestampSeconds * 1000); // Umwandlung in Millisekunden
+            return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+        }
+
+        async function handleLogin() {
+            hideMessage();
+            loginButton.disabled = true;
+            loginButton.textContent = 'Melde an...';
+
+            const email = emailInput.value;
+            const password = passwordInput.value;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage('Login erfolgreich! Rufe Druckerstatus ab...', 'success');
+                    loginSection.classList.add('hidden');
+                    statusSection.classList.remove('hidden');
+                    fetchPrinterStatus();
+                } else {
+                    showMessage(`Login fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Fehler beim Login-Versuch:', error);
+                showMessage('Verbindungsfehler zum Backend. Stellen Sie sicher, dass das Backend läuft.', 'error');
+            } finally {
+                loginButton.disabled = false;
+                loginButton.textContent = 'Anmelden und Token erhalten';
+            }
+        }
+
+        async function fetchPrinterStatus() {
+            hideMessage();
+            loadingIndicator.style.display = 'block';
+            refreshButton.disabled = true;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/printer-status`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    let statusMessage = '';
+                    let detailsMessage = '';
+
+                    // Die Logik für die Anzeige basiert auf der von Ihrem Backend gelieferten 'formatted_status'
+                    statusMessage = data.formatted_status;
+
+                    if (data.print_status === 'PRINTING') {
+                        detailsMessage = `Druckjob: ${data.dev_name || 'Unbekannt'} (${data.progress || 0}%)<br>`;
+                        detailsMessage += `Voraussichtliche Fertigstellung: ${formatTimeFromSeconds(data.estimated_finish_time)}<br>`;
+                        detailsMessage += `Düse: ${data.current_temp_nozzle}°C / ${data.target_temp_nozzle}°C, Bett: ${data.current_temp_bed}°C / ${data.target_temp_bed}°C<br>`;
+                        detailsMessage += `Filament: ${data.filament_type || 'Unbekannt'}`;
+                    } else if (data.print_status === 'IDLE') {
+                        detailsMessage = `Drucker ist online und bereit.`;
+                    } else if (data.print_status === 'PAUSED') {
+                        detailsMessage = `Druckjob: ${data.dev_name || 'Unbekannt'} (${data.progress || 0}%)<br>`;
+                        detailsMessage += `Voraussichtliche Fertigstellung: ${formatTimeFromSeconds(data.estimated_finish_time)}<br>`;
+                        detailsMessage += `Düse: ${data.current_temp_nozzle}°C / ${data.target_temp_nozzle}°C, Bett: ${data.current_temp_bed}°C / ${data.target_temp_bed}°C`;
+                    } else if (data.print_status === 'SUCCESS') {
+                        detailsMessage = `Der letzte Druck wurde erfolgreich beendet.`;
+                    } else if (data.print_status === 'FAILED') {
+                        detailsMessage = `Ein Fehler ist aufgetreten. Bitte überprüfen Sie den Drucker.`;
+                    } else {
+                        detailsMessage = data.message || 'Details nicht verfügbar.';
+                    }
+
+                    printerStatusDiv.textContent = statusMessage;
+                    printerDetailsDiv.innerHTML = detailsMessage;
+                } else {
+                    showMessage(`Fehler beim Abrufen des Status: ${data.message || 'Unbekannter Fehler'}`, 'error');
+                    printerStatusDiv.textContent = 'Status nicht verfügbar.';
+                    printerDetailsDiv.innerHTML = 'Bitte versuchen Sie, sich erneut anzumelden oder kontaktieren Sie den Support.';
+                    if (response.status === 401) { // Token abgelaufen oder nicht vorhanden
+                        loginSection.classList.remove('hidden');
+                        statusSection.classList.add('hidden');
+                    }
+                }
+            } catch (error) {
+                console.error('Fehler beim Abrufen des Druckerstatus vom Backend:', error);
+                showMessage('Verbindungsfehler zum Backend. Stellen Sie sicher, dass das Backend läuft.', 'error');
+                printerStatusDiv.textContent = 'Status konnte nicht geladen werden.';
+                printerDetailsDiv.innerHTML = 'Bitte überprüfen Sie die Backend-Verbindung.';
+            } finally {
+                loadingIndicator.style.display = 'none';
+                refreshButton.disabled = false;
+            }
+        }
+
+        // Event Listener
+        loginButton.addEventListener('click', handleLogin);
+        refreshButton.addEventListener('click', fetchPrinterStatus);
+
+        // Initialer Aufruf beim Laden der Seite: Versucht, den Status abzurufen,
+        // was fehlschlägt, wenn kein Token in der Session vorhanden ist und zum Login auffordert.
+        window.onload = () => {
+            fetchPrinterStatus();
+        };
+    </script>
+</body>
+</html>
