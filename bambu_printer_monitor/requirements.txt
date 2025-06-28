@@ -1,0 +1,7 @@
+flask[async]>=2.0 # For async route handlers and app.on_event (though on_event is more ASGI)
+pydantic>=1.9
+httpx>=0.20
+APScheduler>=3.9 # For AsyncIOScheduler
+uvicorn # Recommended ASGI server for running the app
+# hypercorn is also a good choice
+# python-dotenv (optional, if .env file is used for config)

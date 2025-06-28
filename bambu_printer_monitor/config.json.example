@@ -1,0 +1,6 @@
+{
+  "user_settings": {
+    "access_token": "YOUR_BAMBU_LAB_ACCESS_TOKEN_HERE",
+    "account_email": "your_email@example.com (optional, for reference)"
+  }
+}
