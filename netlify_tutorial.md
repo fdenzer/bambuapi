@@ -27,24 +27,25 @@ This document guides you through deploying the bambuapi project to Netlify.
 
         ### Required Environment Variables
 
-        Based on a typical Node.js server that might interact with a Bambulab printer or other services, you will likely need the following environment variables. **Please update these with the actual variables your `server.js` requires.**
+        After reviewing `server.js`, the primary environment variable required for your Netlify deployment is:
 
-        *   `BAMBU_IP`: The IP address of your Bambulab printer.
-            *   *Example Value*: `192.168.1.100`
-        *   `BAMBU_ACCESS_CODE`: The access code for your Bambulab printer.
-            *   *Example Value*: `your_printer_access_code`
-        *   `BAMBU_SERIAL`: The serial number of your Bambulab printer.
-            *   *Example Value*: `your_printer_serial_number`
-        *   `MQTT_USERNAME`: The username for connecting to the MQTT broker on your printer (often the serial number).
-            *   *Example Value*: `your_printer_serial_number`
-        *   `MQTT_PASSWORD`: The password for connecting to the MQTT broker (often the access code).
-            *   *Example Value*: `your_printer_access_code`
-        *   `PORT`: The port your server will listen on. Netlify typically manages this for functions, but your `server.js` might still expect it. For Netlify Functions, the function itself doesn't listen on a port in the traditional sense; it's invoked via HTTP requests. However, if `server.js` is a standard Node HTTP server, this setup might need adjustment as Netlify Functions are not designed to run persistent servers. **If `server.js` starts an HTTP server, this approach of running it directly in a short-lived Netlify Function might not be suitable. Netlify Functions are meant to execute and then terminate.** You might need to refactor `server.js` to export a handler that can be called by the Netlify function, or use a different hosting service for persistent Node.js servers (like Netlify Background Functions if applicable, or services like Heroku, Render, etc.).
+        *   `SESSION_SECRET`: This is used to sign the session ID cookie for `express-session`. It's crucial for security that you set this to a long, random, and unique string in your Netlify environment variables.
+            *   *Example Value*: `a_very_long_random_and_secure_string_generated_by_you`
+            *   *Note*: The `server.js` has a fallback for development, but you **must** set this in Netlify for production.
+
+        **Regarding other variables and `server.js` behavior:**
+        *   The `server.js` script is designed to interact with the **Bambu Lab Cloud API**. It does *not* directly connect to your printer using IP address, access code, or MQTT credentials. Instead, it expects the end-user to provide their Bambu Lab account email and password through the `/api/login` endpoint. These credentials are then used to obtain an access token from the cloud service.
+        *   `PORT`: The `server.js` file attempts to listen on port 3000. When running `server.js` inside the Netlify Function `netlify/functions/server.js`, this specific port number isn't directly exposed to the internet. Netlify manages how functions are invoked via HTTP requests. The function wrapper attempts to run the `server.js` as is.
 
         **Important Considerations for `server.js` in a Netlify Function:**
-        *   Netlify Functions are stateless and have execution time limits (typically 10-15 seconds on the free tier, extendable on paid plans).
-        *   If `server.js` starts a long-running process (e.g., `app.listen()`), it will likely time out or not behave as expected in a standard Netlify Function.
-        *   The `netlify/functions/server.js` wrapper attempts to run `server.js`. If `server.js` is an Express app or similar, it should ideally be modified to export the app or a handler, rather than starting the server itself with `listen()`. The Netlify Function would then pass event data to this handler.
+        *   **Execution Model**: Netlify Functions are designed for short-lived, request-response cycles. The current `netlify/functions/server.js` attempts to run your entire `server.js` (which includes `app.listen()`) as a child process. This approach has limitations:
+            *   **Timeout**: The function might time out if `server.js` tries to run indefinitely. Standard Netlify functions have execution limits (e.g., 10-15 seconds on the free tier).
+            *   **Statelessness**: Each invocation of the Netlify function is stateless. While `express-session` (using server-side memory store by default) is used, this session state will not persist across different invocations of the Netlify function if you have multiple or if the function instance recycles. For persistent sessions in a serverless environment, you'd typically use an external session store (like Redis or a database).
+        *   **Suitability**: If `server.js` is intended to be a long-running, persistent server, a standard Netlify Function is not the ideal environment. You might need to:
+            1.  **Refactor `server.js`**: Modify it to export the Express `app` instance or a specific handler function, which the Netlify function can then use to process incoming requests directly without `app.listen()`. This is the more common pattern for Express apps in serverless functions.
+            2.  **Consider Alternatives**: For persistent Node.js servers, explore options like Netlify Background Functions (if applicable for your use case, though they also have constraints), or dedicated Node.js hosting platforms (e.g., Heroku, Render, AWS Elastic Beanstalk, Google Cloud Run).
+
+        The current setup *might* work for simple, infrequent requests if the `server.js` process can initialize, handle a request passed to it (though the current wrapper doesn't explicitly pass the event to the Express router within the forked process), and then exit gracefully within the time limit. However, this is not a typical or robust way to host an Express application on Netlify Functions.
 
 5.  **Deploy Site**: Click the "Deploy site" button. Netlify will start the build and deployment process.
 
