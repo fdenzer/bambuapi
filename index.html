@@ -302,7 +302,7 @@
                         showMessage('Login erfolgreich! Rufe Druckerstatus ab...', 'success');
                         loginSection.classList.add('hidden');
                         statusSection.classList.remove('hidden');
-                        fetchPrinterStatus();
+                        await fetchPrinterStatus();
                     }
                 } else {
                     showMessage(`Login fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`, 'error');
@@ -405,7 +405,7 @@
                     showMessage('Verifikation erfolgreich! Rufe Druckerstatus ab...', 'success');
                     verificationSection.classList.add('hidden');
                     statusSection.classList.remove('hidden');
-                    fetchPrinterStatus();
+                    await fetchPrinterStatus();
                 } else {
                     showMessage(`Verifikation fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`, 'error');
                 }
@@ -452,9 +452,13 @@
 
         // Initialer Aufruf beim Laden der Seite: Versucht, den Status abzurufen,
         // was fehlschlägt, wenn kein Token in der Session vorhanden ist und zum Login auffordert.
-        window.onload = () => {
-            fetchPrinterStatus();
-        };
-    </script>
+        window.onload = async () => {
+            try {
+                await fetchPrinterStatus();
+            } catch (error) {
+                console.error('Error fetching printer status:', error);
+                loginSection.classList.remove('hidden');
+            }
+        };</script>
 </body>
 </html>
