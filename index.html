@@ -221,15 +221,19 @@
         </div>
 
         <div id="statusSection" class="hidden">
-            <div id="printerStatus" class="status-text">
-                Lade Status...
-            </div>
-            <div id="printerDetails" class="detail-text">
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-6">
+                <h2 class="text-xl font-semibold mb-4">Druckerstatus</h2>
+                <div id="printerSelector" class="mb-4 hidden">
+                    <label for="printerSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drucker auswählen:</label>
+                    <select id="printerSelect" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
                 </div>
-            <div id="loadingIndicator" class="loading-indicator">
-                Aktualisiere Status...
+                <div id="printerStatus" class="text-2xl font-bold mb-2">Wird geladen...</div>
+                <div id="printerDetails" class="text-gray-600 dark:text-gray-300"></div>
             </div>
-            <button id="refreshButton" class="button">Status aktualisieren</button>
+            <button id="refreshButton" class="button">Aktualisieren</button>
+            <button id="logoutButton" class="button button-secondary ml-4">Abmelden</button>
         </div>
     </div>
 
@@ -316,69 +320,132 @@
             }
         }
 
-        async function fetchPrinterStatus() {
+        async function fetchPrinterStatus(printerId = null) {
             hideMessage();
             loadingIndicator.style.display = 'block';
             refreshButton.disabled = true;
 
             try {
-                const response = await fetch(`${BACKEND_URL}/api/printer-status`, {
-                    credentials: 'include' // Important for session cookies
+                // URL mit optionalem Druckerparameter erstellen
+                let url = `${BACKEND_URL}/api/printer-status`;
+                if (printerId) {
+                    url += `?serial=${encodeURIComponent(printerId)}`;
+                }
+
+                const response = await fetch(url, {
+                    credentials: 'include' // Wichtig für Session-Cookies
                 });
                 const data = await response.json();
 
                 if (response.ok) {
-                    let statusMessage = '';
+                    // Druckerauswahl anzeigen, wenn mehrere Drucker verfügbar sind
+                    if (data.available_printers && data.available_printers.length > 1) {
+                        updatePrinterSelector(data.available_printers, printerId || data.dev_id);
+                    } else {
+                        document.getElementById('printerSelector').classList.add('hidden');
+                    }
+
+                    // Statusmeldung formatieren
+                    let statusMessage = data.formatted_status || `Status: ${data.status || 'Unbekannt'}`;
                     let detailsMessage = '';
 
-                    // Die Logik für die Anzeige basiert auf der von Ihrem Backend gelieferten 'formatted_status'
-                    statusMessage = data.formatted_status;
-
-                    if (data.print_status === 'PRINTING') {
-                        detailsMessage = `Druckjob: ${data.dev_name || 'Unbekannt'} (${data.progress || 0}%)<br>`;
-                        detailsMessage += `Voraussichtliche Fertigstellung: ${formatTimeFromSeconds(data.estimated_finish_time)}<br>`;
-                        detailsMessage += `Düse: ${data.current_temp_nozzle}°C / ${data.target_temp_nozzle}°C, Bett: ${data.current_temp_bed}°C / ${data.target_temp_bed}°C<br>`;
-                        detailsMessage += `Filament: ${data.filament_type || 'Unbekannt'}`;
-                    } else if (data.print_status === 'IDLE') {
-                        detailsMessage = `Drucker ist online und bereit.`;
-                    } else if (data.print_status === 'PAUSED') {
-                        detailsMessage = `Druckjob: ${data.dev_name || 'Unbekannt'} (${data.progress || 0}%)<br>`;
-                        detailsMessage += `Voraussichtliche Fertigstellung: ${formatTimeFromSeconds(data.estimated_finish_time)}<br>`;
-                        detailsMessage += `Düse: ${data.current_temp_nozzle}°C / ${data.target_temp_nozzle}°C, Bett: ${data.current_temp_bed}°C / ${data.target_temp_bed}°C`;
-                    } else if (data.print_status === 'SUCCESS') {
-                        detailsMessage = `Der letzte Druck wurde erfolgreich beendet.`;
-                    } else if (data.print_status === 'FAILED') {
-                        detailsMessage = `Ein Fehler ist aufgetreten. Bitte überprüfen Sie den Drucker.`;
-                    } else {
-                        detailsMessage = data.message || 'Details nicht verfügbar.';
+                    // Details basierend auf dem Druckstatus anzeigen
+                    switch(data.status) {
+                        case 'PRINTING':
+                            detailsMessage = `Druckjob: ${data.dev_name || 'Unbekannt'} (${data.progress || 0}%)<br>`;
+                            if (data.estimated_finish_time) {
+                                detailsMessage += `Voraussichtliche Fertigstellung: ${formatTimeFromSeconds(data.estimated_finish_time)}<br>`;
+                            }
+                            if (data.current_temp_nozzle !== undefined) {
+                                detailsMessage += `Düse: ${data.current_temp_nozzle}°C`;
+                                if (data.target_temp_nozzle) detailsMessage += ` / ${data.target_temp_nozzle}°C`;
+                                if (data.current_temp_bed !== undefined) {
+                                    detailsMessage += `, Bett: ${data.current_temp_bed}°C`;
+                                    if (data.target_temp_bed) detailsMessage += ` / ${data.target_temp_bed}°C`;
+                                }
+                                detailsMessage += '<br>';
+                            }
+                            if (data.filament_type) {
+                                detailsMessage += `Filament: ${data.filament_type}`;
+                            }
+                            break;
+                        case 'IDLE':
+                            detailsMessage = 'Drucker ist online und bereit.';
+                            break;
+                        case 'PAUSED':
+                            detailsMessage = 'Druck ist pausiert.';
+                            if (data.dev_name) detailsMessage = `Druckjob: ${data.dev_name} (pausiert)`;
+                            break;
+                        case 'SUCCESS':
+                            detailsMessage = 'Der letzte Druck wurde erfolgreich abgeschlossen.';
+                            break;
+                        case 'FAILED':
+                            detailsMessage = 'Ein Fehler ist aufgetreten. Bitte überprüfen Sie den Drucker.';
+                            break;
+                        default:
+                            detailsMessage = data.message || 'Keine weiteren Details verfügbar.';
                     }
 
+                    // UI aktualisieren
                     printerStatusDiv.textContent = statusMessage;
                     printerDetailsDiv.innerHTML = detailsMessage;
+                    
+                    // Login-Sektion ausblenden, Status anzeigen
+                    loginSection.classList.add('hidden');
+                    statusSection.classList.remove('hidden');
+                    hasAttemptedLogin = true;
                 } else {
-                    // Only show error message if user has attempted login
-                    if (hasAttemptedLogin) {
-                        showMessage(`Fehler beim Abrufen des Status: ${data.message || 'Unbekannter Fehler'}`, 'error');
-                    }
-                    printerStatusDiv.textContent = 'Status nicht verfügbar.';
-                    printerDetailsDiv.innerHTML = 'Bitte versuchen Sie, sich erneut anzumelden oder kontaktieren Sie den Support.';
-                    if (response.status === 401) { // Token abgelaufen oder nicht vorhanden
+                    // Fehlerbehandlung
+                    if (response.status === 404 && data.available_printers) {
+                        // Ungültige Drucker-ID, aber es gibt verfügbare Drucker
+                        updatePrinterSelector(data.available_printers);
+                        showMessage('Bitte wählen Sie einen Drucker aus der Liste aus.', 'info');
+                    } else if (response.status === 401) {
+                        // Nicht autorisiert - zurück zum Login
                         loginSection.classList.remove('hidden');
                         statusSection.classList.add('hidden');
+                        showMessage('Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                    } else {
+                        // Andere Fehler
+                        const errorMsg = data.message || 'Unbekannter Fehler';
+                        showMessage(`Fehler: ${errorMsg}`, 'error');
+                        printerStatusDiv.textContent = 'Status nicht verfügbar';
+                        printerDetailsDiv.textContent = errorMsg;
                     }
                 }
             } catch (error) {
-                console.error('Fehler beim Abrufen des Druckerstatus vom Backend:', error);
-                // Only show connection error message if user has attempted login
-                if (hasAttemptedLogin) {
-                    showMessage('Verbindungsfehler zum Backend. Stellen Sie sicher, dass das Backend läuft.', 'error');
-                }
-                printerStatusDiv.textContent = 'Status konnte nicht geladen werden.';
-                printerDetailsDiv.innerHTML = 'Bitte überprüfen Sie die Backend-Verbindung.';
+                console.error('Fehler beim Abrufen des Druckerstatus:', error);
+                showMessage('Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.', 'error');
+                printerStatusDiv.textContent = 'Verbindungsfehler';
+                printerDetailsDiv.textContent = 'Der Server konnte nicht erreicht werden.';
             } finally {
                 loadingIndicator.style.display = 'none';
                 refreshButton.disabled = false;
             }
+        }
+
+        // Aktualisiert die Druckerauswahl-Dropdown-Liste
+        function updatePrinterSelector(printers, selectedId = null) {
+            const selector = document.getElementById('printerSelector');
+            const select = document.getElementById('printerSelect');
+            
+            // Dropdown leeren
+            select.innerHTML = '';
+            
+            // Optionen hinzufügen
+            printers.forEach(printer => {
+                const option = document.createElement('option');
+                option.value = printer.id;
+                option.textContent = `${printer.name} (${printer.status})`;
+                if (printer.id === selectedId) {
+                    option.selected = true;
+                    selectedPrinterId = printer.id;
+                }
+                select.appendChild(option);
+            });
+            
+            // Dropdown anzeigen
+            selector.classList.remove('hidden');
         }
 
         async function handleVerification() {
@@ -425,12 +492,36 @@
             verificationCodeInput.value = '';
         }
 
+        // DOM-Elemente
+        const printerSelect = document.getElementById('printerSelect');
+        let selectedPrinterId = null;
+
         // Event Listener
         loginButton.addEventListener('click', handleLogin);
         verifyButton.addEventListener('click', handleVerification);
         backToLoginButton.addEventListener('click', backToLogin);
-        refreshButton.addEventListener('click', fetchPrinterStatus);
-        
+        logoutButton.addEventListener('click', () => {
+            // Session auf dem Server beenden
+            fetch('/api/logout', { method: 'POST', credentials: 'include' })
+                .then(() => {
+                    // Zurück zum Login-Bildschirm
+                    loginSection.classList.remove('hidden');
+                    statusSection.classList.add('hidden');
+                    document.getElementById('email').value = '';
+                    document.getElementById('password').value = '';
+                })
+                .catch(error => console.error('Fehler beim Abmelden:', error));
+        });
+
+        // Event-Listener für Druckerauswahl
+        printerSelect.addEventListener('change', (e) => {
+            selectedPrinterId = e.target.value;
+            fetchPrinterStatus(selectedPrinterId);
+        });
+
+        // Event-Listener für Aktualisieren-Button
+        refreshButton.addEventListener('click', () => fetchPrinterStatus(selectedPrinterId));
+
         // Enter key support for login form
         emailInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {

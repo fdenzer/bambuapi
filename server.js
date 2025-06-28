@@ -204,9 +204,23 @@ app.post('/api/login', async (req, res) => {
   }
 })
 
+// HTTP POST Endpunkt zum Abmelden
+app.post('/api/logout', (req, res) => {
+  // Session zerstören
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Fehler beim Zerstören der Session:', err);
+      return res.status(500).json({ message: 'Fehler beim Abmelden' });
+    }
+    res.clearCookie('connect.sid'); // Session-Cookie löschen
+    res.json({ message: 'Erfolgreich abgemeldet' });
+  });
+});
+
 // HTTP GET Endpunkt zum Abrufen des Druckerstatus
 app.get('/api/printer-status', async (req, res) => {
   const accessToken = req.session.accessToken // Access Token aus der Session abrufen
+  const printerSerial = req.query.serial // Optionaler Parameter für die Druckerseriennummer
 
   if (!accessToken) {
     return res.status(401).json({ message: 'Kein Access Token in der Session verfügbar. Bitte zuerst anmelden.' })
@@ -216,7 +230,7 @@ app.get('/api/printer-status', async (req, res) => {
     const response = await fetch(`${BAMBU_API_BASE_URL}/v1/iot-service/api/user/print`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`, // Token aus der Session verwenden
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       }
     })
@@ -224,10 +238,10 @@ app.get('/api/printer-status', async (req, res) => {
     if (!response.ok) {
       const errorData = await response.json()
       console.error('Fehler beim Abrufen des Druckerstatus:', errorData.message || response.statusText)
-      // Wenn der Token abgelaufen ist oder ungültig ist (z.B. 401 Unauthorized)
+      
       if (response.status === 401) {
         console.log('Access Token ungültig/abgelaufen. Session-Token wird gelöscht.')
-        req.session.destroy((err) => { // Session zerstören
+        req.session.destroy((err) => {
           if (err) console.error('Fehler beim Zerstören der Session:', err)
         })
         return res.status(401).json({ message: 'Token abgelaufen oder ungültig. Bitte melden Sie sich erneut an.' })
@@ -236,45 +250,43 @@ app.get('/api/printer-status', async (req, res) => {
     }
 
     const data = await response.json()
-    // console.log('Druckerstatus Rohdaten:', JSON.stringify(data, null, 2)) // Zum Debuggen
 
-    if (data.devices && data.devices.length > 0) {
-      const printer = data.devices[0] // Nehmen Sie den ersten Drucker
-      let statusMessage = 'Unbekannt'
-      let estimatedFinishTime = null
-
-      // Die 'prediction' ist die verbleibende Zeit in Sekunden
-      if (printer.print_status === 'PRINTING' && typeof printer.prediction === 'number') {
-        const finishTimestampSeconds = Math.floor(Date.now() / 1000) + printer.prediction
-        estimatedFinishTime = finishTimestampSeconds
-        statusMessage = `Druckt bis ${new Date(finishTimestampSeconds * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`
-      } else if (printer.print_status === 'SUCCESS') {
-        statusMessage = 'Druck abgeschlossen'
-      } else if (printer.print_status === 'IDLE') {
-        statusMessage = 'Bereit zum Drucken'
-      } else if (printer.print_status === 'PAUSED') {
-        statusMessage = 'Druck pausiert'
-      } else if (printer.print_status === 'FAILED') {
-        statusMessage = 'Druck fehlgeschlagen'
-      } else {
-        statusMessage = `Status: ${printer.print_status || 'Unbekannt'}`
-      }
-
-      const responseData = {
-        dev_id: printer.dev_id,
-        dev_name: printer.dev_name,
-        online: printer.dev_online,
-        print_status: printer.print_status,
-        progress: printer.progress, // Kann null sein, wenn nicht gedruckt wird
-        prediction_seconds: printer.prediction, // Verbleibende Zeit in Sekunden
-        estimated_finish_time: estimatedFinishTime, // Timestamp in Sekunden
-        formatted_status: statusMessage,
-        message: printer.message || '' // Allgemeine Nachrichten
-      }
-      res.json(responseData)
-    } else {
-      res.status(404).json({ message: 'Keine Drucker gefunden oder Status nicht verfügbar.' })
+    if (!data.devices || data.devices.length === 0) {
+      return res.status(404).json({ 
+        message: 'Keine Drucker gefunden.',
+        help: 'Bitte stellen Sie sicher, dass Sie mindestens einen Drucker mit Ihrem Bambu Lab Konto verbunden haben.'
+      })
     }
+
+    let printer;
+    if (printerSerial) {
+      printer = data.devices.find(d => d.dev_id === printerSerial)
+      if (!printer) {
+        return res.status(404).json({ 
+          message: 'Drucker nicht gefunden.',
+          help: 'Bitte überprüfen Sie die Seriennummer des Druckers.'
+        })
+      }
+    } else {
+      printer = data.devices[0]
+    }
+
+    const statusMessage = printer.print_status === 'online' ? 'Der Drucker ist online und bereit zum Drucken.' : 'Der Drucker ist offline oder nicht verfügbar.'
+    const responseData = {
+      status: printer.print_status,
+      formatted_status: statusMessage,
+      message: printer.message || '' // Allgemeine Nachrichten
+    }
+    // Füge Informationen über verfügbare Drucker hinzu, wenn mehrere vorhanden sind
+    if (data.devices.length > 1) {
+      responseData.available_printers = data.devices.map(d => ({
+        id: d.dev_id,
+        name: d.dev_name,
+        status: d.print_status
+      }))
+    }
+    
+    res.json(responseData)
   } catch (error) {
     console.error('Backend-Fehler beim Abrufen des Druckerstatus:', error)
     res.status(500).json({ message: 'Interner Serverfehler beim Abrufen des Druckerstatus.' })
