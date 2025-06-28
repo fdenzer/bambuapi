@@ -115,23 +115,7 @@
             text-align: center;
             border: 1px solid var(--color-container-border);
         }
-        .status-text {
-            font-size: 1.875rem; /* 30px */
-            font-weight: 700;
-            color: var(--color-status-text);
-            margin-bottom: 20px;
-        }
-        .detail-text {
-            font-size: 1.125rem; /* 18px */
-            color: var(--color-detail-text);
-            margin-bottom: 10px;
-        }
-        .loading-indicator {
-            display: none; /* Standardmäßig versteckt */
-            color: var(--color-detail-text); /* Reusing detail-text color */
-            font-style: italic;
-            margin-top: 10px;
-        }
+        /* Removed unused selectors: .status-text, .detail-text, .loading-indicator */
         .button {
             background-color: var(--color-button-bg);
             color: var(--color-button-text);
@@ -204,8 +188,10 @@
                 Ihre Zugangsdaten werden sicher an das Backend gesendet und dort verarbeitet.
                 Sie werden nicht direkt im Browser gespeichert.
             </p>
-            <input type="email" id="emailInput" class="input-field" placeholder="E-Mail-Adresse" required>
-            <input type="password" id="passwordInput" class="input-field" placeholder="Passwort" required>
+            <label for="emailInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">E-Mail-Adresse</label>
+            <input type="email" id="emailInput" class="input-field mb-4" placeholder="name@beispiel.de" required>
+            <label for="passwordInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Passwort</label>
+            <input type="password" id="passwordInput" class="input-field" placeholder="••••••••" required>
             <button id="loginButton" class="button w-full">Anmelden und Token erhalten</button>
         </div>
 
@@ -215,7 +201,8 @@
                 Ein Verifikationscode wurde an Ihre E-Mail-Adresse gesendet.
                 Bitte geben Sie den Code ein, um die Anmeldung abzuschließen.
             </p>
-            <input type="text" id="verificationCodeInput" class="input-field" placeholder="Verifikationscode" required maxlength="6">
+            <label for="verificationCodeInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Verifikationscode</label>
+            <input type="text" id="verificationCodeInput" class="input-field" placeholder="123456" required maxlength="6" inputmode="numeric" pattern="\d{6}">
             <button id="verifyButton" class="button w-full">Code bestätigen</button>
             <button id="backToLoginButton" class="button secondary w-full mt-2">Zurück zum Login</button>
         </div>
@@ -254,8 +241,8 @@
         const printerDetailsDiv = document.getElementById('printerDetails');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const refreshButton = document.getElementById('refreshButton');
-        
-        let hasAttemptedLogin = false; // Flag to track if user has attempted login
+
+        let hasAttemptedLogin; // Will be set to true when login is attempted
 
         function showMessage(message, type = 'info') {
             messageBox.textContent = message;
@@ -347,7 +334,7 @@
 
                     // Statusmeldung formatieren
                     let statusMessage = data.formatted_status || `Status: ${data.status || 'Unbekannt'}`;
-                    let detailsMessage = '';
+                    let detailsMessage;
 
                     // Details basierend auf dem Druckstatus anzeigen
                     switch(data.status) {
