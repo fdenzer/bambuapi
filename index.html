@@ -131,6 +131,8 @@
         const printerDetailsDiv = document.getElementById('printerDetails');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const refreshButton = document.getElementById('refreshButton');
+        
+        let hasAttemptedLogin = false; // Flag to track if user has attempted login
 
         function showMessage(message, type = 'info') {
             messageBox.textContent = message;
@@ -152,6 +154,7 @@
             hideMessage();
             loginButton.disabled = true;
             loginButton.textContent = 'Melde an...';
+            hasAttemptedLogin = true; // Set flag when user attempts login
 
             const email = emailInput.value;
             const password = passwordInput.value;
@@ -222,7 +225,10 @@
                     printerStatusDiv.textContent = statusMessage;
                     printerDetailsDiv.innerHTML = detailsMessage;
                 } else {
-                    showMessage(`Fehler beim Abrufen des Status: ${data.message || 'Unbekannter Fehler'}`, 'error');
+                    // Only show error message if user has attempted login
+                    if (hasAttemptedLogin) {
+                        showMessage(`Fehler beim Abrufen des Status: ${data.message || 'Unbekannter Fehler'}`, 'error');
+                    }
                     printerStatusDiv.textContent = 'Status nicht verfügbar.';
                     printerDetailsDiv.innerHTML = 'Bitte versuchen Sie, sich erneut anzumelden oder kontaktieren Sie den Support.';
                     if (response.status === 401) { // Token abgelaufen oder nicht vorhanden
@@ -232,7 +238,10 @@
                 }
             } catch (error) {
                 console.error('Fehler beim Abrufen des Druckerstatus vom Backend:', error);
-                showMessage('Verbindungsfehler zum Backend. Stellen Sie sicher, dass das Backend läuft.', 'error');
+                // Only show connection error message if user has attempted login
+                if (hasAttemptedLogin) {
+                    showMessage('Verbindungsfehler zum Backend. Stellen Sie sicher, dass das Backend läuft.', 'error');
+                }
                 printerStatusDiv.textContent = 'Status konnte nicht geladen werden.';
                 printerDetailsDiv.innerHTML = 'Bitte überprüfen Sie die Backend-Verbindung.';
             } finally {
