@@ -4,8 +4,10 @@ Dieses Node.js-Backend dient als sichere Schnittstelle zur Bambu Lab Cloud API, 
 
 ## Funktionen
 
-- **Sichere Authentifizierung**
-  : Meldet sich bei der Bambu Lab Cloud API mit Benutzername und Passwort an.
+- **Sichere 2FA-Authentifizierung**
+  : Implementiert einen zweistufigen Login-Prozess für die Bambu Lab Cloud API:
+  1. **Schritt 1**: E-Mail und Passwort-Eingabe
+  2. **Schritt 2**: Verifikationscode aus der E-Mail (falls von Bambu Lab angefordert)
 - **Token-Management**
   : Speichert den erhaltenen Access Token in der Server-Session, um wiederholte Logins während einer Browsersitzung zu vermeiden.
 - **Druckerstatus-Abruf**
@@ -14,6 +16,18 @@ Dieses Node.js-Backend dient als sichere Schnittstelle zur Bambu Lab Cloud API, 
   : Ermöglicht den Zugriff von einer spezifischen Frontend-Domain (z.B. GitHub Pages).
 - **Fehlerbehandlung**
   : Behandelt API-Fehler und Token-Ablauf, fordert bei Bedarf einen erneuten Login an.
+
+## Benutzer-Workflow
+
+Die Anwendung führt den Benutzer durch einen intelligenten 2FA-Login-Prozess:
+
+1. **Initiale Anmeldung**: Benutzer gibt E-Mail und Passwort ein
+2. **Automatische Erkennung**: Das System erkennt, ob Bambu Lab eine Zwei-Faktor-Authentifizierung erfordert
+3. **Direkte Anmeldung**: Falls keine 2FA erforderlich → direkter Zugang zum Druckerstatus
+4. **2FA-Verifikation**: Falls 2FA erforderlich → Verifikationsformular wird angezeigt
+5. **E-Mail-Verifizierung**: Benutzer erhält Verifikationscode per E-Mail und gibt diesen ein
+6. **Abschluss**: Nach erfolgreicher Verifikation → Zugang zum Druckerstatus
+7. **Status-Überwachung**: Kontinuierliche Überwachung des 3D-Drucker-Status mit Aktualisierungsmöglichkeit
 
 ## Voraussetzungen
 
@@ -71,16 +85,36 @@ Das Backend stellt die folgenden HTTP-Endpunkte bereit:
 
 - **POST /api/login**
   : **Beschreibung**
-    : Meldet sich bei der Bambu Lab Cloud API an und speichert den erhaltenen Access Token in der Server-Session.
-  : **Anfrage-Body (JSON):**
+    : Meldet sich bei der Bambu Lab Cloud API an mit zweistufiger Authentifizierung. Dieser Endpunkt verarbeitet sowohl den ersten Schritt (E-Mail/Passwort) als auch den zweiten Schritt (Verifikationscode) je nach übergebenen Parametern.
+  
+  : **Schritt 1 - Initiale Anmeldung:**
     ```json
     {
         "email": "ihre_email@example.com",
         "password": "ihr_passwort"
     }
     ```
-  : **Antwort**
-    : Erfolgreiche Anmeldung gibt `{ message: 'Login erfolgreich!', accessTokenAvailable: true }` zurück. Bei Fehlern wird ein entsprechender Statuscode (z.B. 401 Unauthorized) und eine Fehlermeldung zurückgegeben.
+    Antwort bei direktem Login-Erfolg:
+    ```json
+    { "message": "Login erfolgreich!", "accessTokenAvailable": true }
+    ```
+    Antwort wenn 2FA erforderlich:
+    ```json
+    { "message": "Verifikationscode wurde gesendet. Bitte geben Sie den Code ein.", "needsVerification": true }
+    ```
+  
+  : **Schritt 2 - Verifikation (falls erforderlich):**
+    ```json
+    {
+        "email": "ihre_email@example.com",
+        "password": "ihr_passwort",
+        "verificationCode": "123456"
+    }
+    ```
+    Antwort bei erfolgreicher Verifikation:
+    ```json
+    { "message": "Verifikation erfolgreich!", "accessTokenAvailable": true }
+    ```
 
 - **GET /api/printer-status**
   : **Beschreibung**

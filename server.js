@@ -48,7 +48,7 @@ app.use((req, res, next) => {
  * Versucht, sich bei der Bambu Lab Cloud anzumelden und Tokens zu erhalten.
  * @param {string} email - Die E-Mail-Adresse des Bambu Lab Kontos.
  * @param {string} password - Das Passwort des Bambu Lab Kontos.
- * @returns {Promise<string|null>} Der Access Token bei Erfolg, sonst null.
+ * @returns {Promise<{success: boolean, needsVerification: boolean, tfaKey?: string, accessToken?: string}>} Login-Ergebnis
  */
 async function loginToBambuLabCloud (email, password) {
   console.log(`Versuche, mich bei Bambu Lab Cloud mit E-Mail: ${email} anzumelden...`)
@@ -67,39 +67,140 @@ async function loginToBambuLabCloud (email, password) {
     if (!response.ok) {
       const errorData = await response.json()
       console.error('Login-Fehler:', errorData.message || response.statusText)
+      return { success: false, needsVerification: false }
+    }
+
+    const data = await response.json()
+    console.log('Login-Antwort (vollständig):', JSON.stringify(data, null, 2))
+    
+    // Check if verification is needed
+    if (data.loginType === 'verifyCode') {
+      console.log('Zwei-Faktor-Authentifizierung erforderlich. Verifikationscode wurde gesendet.')
+      return { 
+        success: true, 
+        needsVerification: true, 
+        tfaKey: data.tfaKey || '' // Handle empty tfaKey
+      }
+    }
+    
+    // Check for access token
+    const accessToken = data.accessToken || data.access_token || data.token || data.authToken
+    
+    if (accessToken && accessToken.trim() !== '') {
+      console.log('Login erfolgreich! Access Token erhalten.')
+      if (data.expiresIn) {
+        console.log(`Token gültig für: ${data.expiresIn / 3600 / 24} Tage`)
+      }
+      return { success: true, needsVerification: false, accessToken }
+    } else {
+      console.error('Login erfolgreich, aber kein Access Token in der Antwort gefunden.')
+      console.error('Verfügbare Felder in der Antwort:', Object.keys(data))
+      return { success: false, needsVerification: false }
+    }
+  } catch (error) {
+    console.error('Fehler beim Login-Versuch:', error)
+    return { success: false, needsVerification: false }
+  }
+}
+
+/**
+ * Verifiziert den Login mit einem Verifikationscode.
+ * @param {string} email - Die E-Mail-Adresse des Bambu Lab Kontos.
+ * @param {string} verificationCode - Der Verifikationscode.
+ * @param {string} tfaKey - Der TFA-Schlüssel aus dem ersten Login-Versuch.
+ * @returns {Promise<string|null>} Der Access Token bei Erfolg, sonst null.
+ */
+async function verifyLogin(email, verificationCode, tfaKey) {
+  console.log(`Verifiziere Login mit Code für E-Mail: ${email}...`)
+  try {
+    // Prepare the request body
+    const requestBody = {
+      account: email,
+      code: verificationCode
+    }
+    
+    // Only include tfaKey if it's not empty
+    if (tfaKey && tfaKey.trim() !== '') {
+      requestBody.tfaKey = tfaKey
+    }
+    
+    const response = await fetch(`${BAMBU_API_BASE_URL}/v1/user-service/user/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error('Verifikations-Fehler:', errorData.message || response.statusText)
       return null
     }
 
     const data = await response.json()
-    if (data.accessToken) {
-      console.log('Login erfolgreich! Access Token erhalten.')
-      console.log(`Token gültig für: ${data.expiresIn / 3600 / 24} Tage`)
-      return data.accessToken
+    console.log('Verifikations-Antwort (vollständig):', JSON.stringify(data, null, 2))
+    
+    const accessToken = data.accessToken || data.access_token || data.token || data.authToken
+    
+    if (accessToken && accessToken.trim() !== '') {
+      console.log('Verifikation erfolgreich! Access Token erhalten.')
+      if (data.expiresIn) {
+        console.log(`Token gültig für: ${data.expiresIn / 3600 / 24} Tage`)
+      }
+      return accessToken
     } else {
-      console.error('Login erfolgreich, aber kein Access Token in der Antwort gefunden.')
+      console.error('Verifikation erfolgreich, aber kein Access Token in der Antwort gefunden.')
       return null
     }
   } catch (error) {
-    console.error('Fehler beim Login-Versuch:', error)
+    console.error('Fehler bei der Verifikation:', error)
     return null
   }
 }
 
 // HTTP POST Endpunkt für den Login
 app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body
+  const { email, password, verificationCode } = req.body
 
   if (!email || !password) {
     return res.status(400).json({ message: 'E-Mail und Passwort sind erforderlich.' })
   }
 
-  const accessToken = await loginToBambuLabCloud(email, password)
+  // If verification code is provided, this is the second step
+  if (verificationCode) {
+    const tfaKey = req.session.tfaKey || '' // Use empty string if no tfaKey in session
+    const accessToken = await verifyLogin(email, verificationCode, tfaKey)
+    
+    if (accessToken) {
+      req.session.accessToken = accessToken
+      delete req.session.tfaKey // Clean up TFA key
+      res.json({ message: 'Verifikation erfolgreich!', accessTokenAvailable: true })
+    } else {
+      res.status(401).json({ message: 'Verifikation fehlgeschlagen. Überprüfen Sie den Code.' })
+    }
+    return
+  }
 
-  if (accessToken) {
-    req.session.accessToken = accessToken // Access Token in der Session speichern
+  // First step: initial login
+  const loginResult = await loginToBambuLabCloud(email, password)
+
+  if (!loginResult.success) {
+    return res.status(401).json({ message: 'Login fehlgeschlagen. Überprüfen Sie Ihre Zugangsdaten.' })
+  }
+
+  if (loginResult.needsVerification) {
+    // Store TFA key in session for second step
+    req.session.tfaKey = loginResult.tfaKey
+    res.json({ 
+      message: 'Verifikationscode wurde gesendet. Bitte geben Sie den Code ein.',
+      needsVerification: true 
+    })
+  } else if (loginResult.accessToken) {
+    req.session.accessToken = loginResult.accessToken
     res.json({ message: 'Login erfolgreich!', accessTokenAvailable: true })
   } else {
-    res.status(401).json({ message: 'Login fehlgeschlagen. Überprüfen Sie Ihre Zugangsdaten.' })
+    res.status(500).json({ message: 'Unerwarteter Login-Fehler.' })
   }
 })
 

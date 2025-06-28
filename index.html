@@ -86,6 +86,11 @@
             color: #065f46; /* Green 800 */
             border-color: #34d399; /* Green 400 */
         }
+        .message-box.info {
+            background-color: #dbeafe; /* Blue 100 */
+            color: #1e40af; /* Blue 800 */
+            border-color: #3b82f6; /* Blue 500 */
+        }
     </style>
 </head>
 <body>
@@ -103,6 +108,17 @@
             <input type="email" id="emailInput" class="input-field" placeholder="E-Mail-Adresse" required>
             <input type="password" id="passwordInput" class="input-field" placeholder="Passwort" required>
             <button id="loginButton" class="button w-full">Anmelden und Token erhalten</button>
+        </div>
+
+        <div id="verificationSection" class="hidden">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Zwei-Faktor-Authentifizierung</h2>
+            <p class="text-sm text-gray-600 mb-4">
+                Ein Verifikationscode wurde an Ihre E-Mail-Adresse gesendet.
+                Bitte geben Sie den Code ein, um die Anmeldung abzuschließen.
+            </p>
+            <input type="text" id="verificationCodeInput" class="input-field" placeholder="Verifikationscode" required maxlength="6">
+            <button id="verifyButton" class="button w-full">Code bestätigen</button>
+            <button id="backToLoginButton" class="button w-full mt-2" style="background-color: #64748b;">Zurück zum Login</button>
         </div>
 
         <div id="statusSection" class="hidden">
@@ -123,10 +139,14 @@
 
         const messageBox = document.getElementById('messageBox');
         const loginSection = document.getElementById('loginSection');
+        const verificationSection = document.getElementById('verificationSection');
         const statusSection = document.getElementById('statusSection');
         const emailInput = document.getElementById('emailInput');
         const passwordInput = document.getElementById('passwordInput');
         const loginButton = document.getElementById('loginButton');
+        const verificationCodeInput = document.getElementById('verificationCodeInput');
+        const verifyButton = document.getElementById('verifyButton');
+        const backToLoginButton = document.getElementById('backToLoginButton');
         const printerStatusDiv = document.getElementById('printerStatus');
         const printerDetailsDiv = document.getElementById('printerDetails');
         const loadingIndicator = document.getElementById('loadingIndicator');
@@ -165,16 +185,26 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
+                    credentials: 'include', // Important for session cookies
                     body: JSON.stringify({ email, password })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    showMessage('Login erfolgreich! Rufe Druckerstatus ab...', 'success');
-                    loginSection.classList.add('hidden');
-                    statusSection.classList.remove('hidden');
-                    fetchPrinterStatus();
+                    if (data.needsVerification) {
+                        // Show 2FA verification form
+                        showMessage('Verifikationscode wurde an Ihre E-Mail gesendet. Bitte geben Sie den Code ein.', 'info');
+                        loginSection.classList.add('hidden');
+                        verificationSection.classList.remove('hidden');
+                        verificationCodeInput.focus();
+                    } else {
+                        // Direct login success
+                        showMessage('Login erfolgreich! Rufe Druckerstatus ab...', 'success');
+                        loginSection.classList.add('hidden');
+                        statusSection.classList.remove('hidden');
+                        fetchPrinterStatus();
+                    }
                 } else {
                     showMessage(`Login fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`, 'error');
                 }
@@ -193,7 +223,9 @@
             refreshButton.disabled = true;
 
             try {
-                const response = await fetch(`${BACKEND_URL}/api/printer-status`);
+                const response = await fetch(`${BACKEND_URL}/api/printer-status`, {
+                    credentials: 'include' // Important for session cookies
+                });
                 const data = await response.json();
 
                 if (response.ok) {
@@ -250,9 +282,74 @@
             }
         }
 
+        async function handleVerification() {
+            hideMessage();
+            verifyButton.disabled = true;
+            verifyButton.textContent = 'Verifiziere...';
+
+            const email = emailInput.value;
+            const verificationCode = verificationCodeInput.value;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include', // Important for session cookies
+                    body: JSON.stringify({ email, password: passwordInput.value, verificationCode })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage('Verifikation erfolgreich! Rufe Druckerstatus ab...', 'success');
+                    verificationSection.classList.add('hidden');
+                    statusSection.classList.remove('hidden');
+                    fetchPrinterStatus();
+                } else {
+                    showMessage(`Verifikation fehlgeschlagen: ${data.message || 'Unbekannter Fehler'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Fehler bei der Verifikation:', error);
+                showMessage('Verbindungsfehler zum Backend. Stellen Sie sicher, dass das Backend läuft.', 'error');
+            } finally {
+                verifyButton.disabled = false;
+                verifyButton.textContent = 'Code bestätigen';
+            }
+        }
+
+        function backToLogin() {
+            hideMessage();
+            verificationSection.classList.add('hidden');
+            loginSection.classList.remove('hidden');
+            verificationCodeInput.value = '';
+        }
+
         // Event Listener
         loginButton.addEventListener('click', handleLogin);
+        verifyButton.addEventListener('click', handleVerification);
+        backToLoginButton.addEventListener('click', backToLogin);
         refreshButton.addEventListener('click', fetchPrinterStatus);
+        
+        // Enter key support for login form
+        emailInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+        passwordInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+        
+        // Enter key support for verification form
+        verificationCodeInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleVerification();
+            }
+        });
 
         // Initialer Aufruf beim Laden der Seite: Versucht, den Status abzurufen,
         // was fehlschlägt, wenn kein Token in der Session vorhanden ist und zum Login auffordert.
