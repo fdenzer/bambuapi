@@ -1,0 +1,23 @@
+{
+  "name": "bambulab-status-backend",
+  "version": "1.0.0",
+  "description": "Ein Node.js Backend zur Anzeige des Bambu Lab 3D-Druckerstatus über MQTT.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "bambulab",
+    "3d-printer",
+    "mqtt",
+    "nodejs",
+    "express",
+    "status"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "mqtt": "^5.7.0"
+  }
+}
