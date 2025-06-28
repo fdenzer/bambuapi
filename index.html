@@ -6,10 +6,97 @@
     <title>Bambu Lab Druckerstatus</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+
+        // Optional: Listen for changes in OS preference
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+                localStorage.theme = 'dark'; // Optionally save preference
+            } else {
+                document.documentElement.classList.remove('dark');
+                localStorage.theme = 'light'; // Optionally save preference
+            }
+        });
+    </script>
     <style>
+        html {
+            /* Light theme (default) variables */
+            --color-page-bg: #f0f2f5;
+            --color-container-bg: #ffffff;
+            --color-container-border: #e2e8f0;
+            --color-text-default: #334155; /* Base text color */
+            --color-text-muted: #64748b;   /* Lighter text for details, placeholders */
+            --color-status-text: #334155;
+            --color-detail-text: #64748b;
+            --color-button-bg: #0d9488;
+            --color-button-text: white;
+            --color-button-hover-bg: #0f766e;
+            --color-button-secondary-bg: #64748b;
+            --color-button-secondary-text: white;
+            --color-button-secondary-hover-bg: #475569; /* Example hover, adjust as needed */
+            --color-input-border: #cbd5e1;
+            --color-input-bg: #ffffff; /* Default input background */
+            --color-input-text: #334155; /* Default input text color */
+            --color-shadow: rgba(0, 0, 0, 0.1);
+
+            --color-msgbox-default-bg: #fefcbf;
+            --color-msgbox-default-text: #8a6502;
+            --color-msgbox-default-border: #fcd34d;
+            --color-msgbox-error-bg: #fee2e2;
+            --color-msgbox-error-text: #991b1b;
+            --color-msgbox-error-border: #ef4444;
+            --color-msgbox-success-bg: #d1fae5;
+            --color-msgbox-success-text: #065f46;
+            --color-msgbox-success-border: #34d399;
+            --color-msgbox-info-bg: #dbeafe;
+            --color-msgbox-info-text: #1e40af;
+            --color-msgbox-info-border: #3b82f6;
+        }
+
+        html.dark {
+            --color-page-bg: #111827; /* Gray 900 */
+            --color-container-bg: #1f2937; /* Gray 800 */
+            --color-container-border: #374151; /* Gray 700 */
+            --color-text-default: #e5e7eb; /* Gray 200 */
+            --color-text-muted: #9ca3af; /* Gray 400 */
+            --color-status-text: #e5e7eb; /* Gray 200 */
+            --color-detail-text: #9ca3af; /* Gray 400 */
+            --color-button-bg: #14b8a6; /* Teal 500 */
+            --color-button-text: #ffffff;
+            --color-button-hover-bg: #0d9488; /* Teal 600 */
+            --color-button-secondary-bg: #4b5563; /* Gray 600 */
+            --color-button-secondary-text: #ffffff;
+            --color-button-secondary-hover-bg: #374151; /* Gray 700 */
+            --color-input-border: #4b5563; /* Gray 600 */
+            --color-input-bg: #374151; /* Gray 700 */
+            --color-input-text: #f3f4f6; /* Gray 100 */
+            --color-shadow: rgba(0, 0, 0, 0.4);
+
+            --color-msgbox-default-bg: #3f3f46; /* Zinc 700 */
+            --color-msgbox-default-text: #fde047; /* Yellow 400 */
+            --color-msgbox-default-border: #facc15; /* Yellow 500 */
+            --color-msgbox-error-bg: #450a0a; /* Red 900 */
+            --color-msgbox-error-text: #fca5a5; /* Red 300 */
+            --color-msgbox-error-border: #dc2626; /* Red 600 */
+            --color-msgbox-success-bg: #064e3b; /* Green 900 */
+            --color-msgbox-success-text: #6ee7b7; /* Green 300 */
+            --color-msgbox-success-border: #10b981; /* Green 500 */
+            --color-msgbox-info-bg: #1e3a8a; /* Blue 900 */
+            --color-msgbox-info-text: #93c5fd; /* Blue 300 */
+            --color-msgbox-info-border: #2563eb; /* Blue 600 */
+        }
+
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f0f2f5;
+            background-color: var(--color-page-bg);
+            color: var(--color-text-default); /* Applying default text color */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -19,35 +106,35 @@
             box-sizing: border-box;
         }
         .container {
-            background-color: #ffffff;
+            background-color: var(--color-container-bg);
             padding: 30px;
             border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 25px var(--color-shadow);
             max-width: 500px;
             width: 100%;
             text-align: center;
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--color-container-border);
         }
         .status-text {
             font-size: 1.875rem; /* 30px */
             font-weight: 700;
-            color: #334155; /* Slate 700 */
+            color: var(--color-status-text);
             margin-bottom: 20px;
         }
         .detail-text {
             font-size: 1.125rem; /* 18px */
-            color: #64748b; /* Slate 500 */
+            color: var(--color-detail-text);
             margin-bottom: 10px;
         }
         .loading-indicator {
             display: none; /* Standardmäßig versteckt */
-            color: #64748b;
+            color: var(--color-detail-text); /* Reusing detail-text color */
             font-style: italic;
             margin-top: 10px;
         }
         .button {
-            background-color: #0d9488; /* Teal 600 */
-            color: white;
+            background-color: var(--color-button-bg);
+            color: var(--color-button-text);
             padding: 12px 24px;
             border-radius: 8px;
             font-weight: 600;
@@ -57,51 +144,63 @@
             display: inline-block;
         }
         .button:hover {
-            background-color: #0f766e; /* Teal 700 */
+            background-color: var(--color-button-hover-bg);
+        }
+        .button.secondary { /* New class for the secondary button */
+            background-color: var(--color-button-secondary-bg);
+            color: var(--color-button-secondary-text);
+        }
+        .button.secondary:hover {
+            background-color: var(--color-button-secondary-hover-bg);
         }
         .input-field {
             width: 100%;
             padding: 10px;
             margin-bottom: 15px;
-            border: 1px solid #cbd5e1; /* Slate 300 */
+            border: 1px solid var(--color-input-border);
+            background-color: var(--color-input-bg);
+            color: var(--color-input-text);
             border-radius: 8px;
             box-sizing: border-box;
         }
+        .input-field::placeholder { /* Styling placeholder text */
+            color: var(--color-text-muted);
+        }
         .message-box {
-            background-color: #fefcbf; /* Yellow 100 */
-            color: #8a6502; /* Yellow 800 */
+            background-color: var(--color-msgbox-default-bg);
+            color: var(--color-msgbox-default-text);
             padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
-            border: 1px solid #fcd34d; /* Yellow 400 */
+            border: 1px solid var(--color-msgbox-default-border);
             display: none; /* Hidden by default */
         }
         .message-box.error {
-            background-color: #fee2e2; /* Red 100 */
-            color: #991b1b; /* Red 800 */
-            border-color: #ef4444; /* Red 500 */
+            background-color: var(--color-msgbox-error-bg);
+            color: var(--color-msgbox-error-text);
+            border-color: var(--color-msgbox-error-border);
         }
         .message-box.success {
-            background-color: #d1fae5; /* Green 100 */
-            color: #065f46; /* Green 800 */
-            border-color: #34d399; /* Green 400 */
+            background-color: var(--color-msgbox-success-bg);
+            color: var(--color-msgbox-success-text);
+            border-color: var(--color-msgbox-success-border);
         }
         .message-box.info {
-            background-color: #dbeafe; /* Blue 100 */
-            color: #1e40af; /* Blue 800 */
-            border-color: #3b82f6; /* Blue 500 */
+            background-color: var(--color-msgbox-info-bg);
+            color: var(--color-msgbox-info-text);
+            border-color: var(--color-msgbox-info-border);
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6">Bambu Lab Druckerstatus</h1>
+        <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Bambu Lab Druckerstatus</h1>
 
         <div id="messageBox" class="message-box"></div>
 
         <div id="loginSection">
-            <h2 class="text-xl font-semibold text-gray-700 mb-4">Login zur Bambu Lab Cloud</h2>
-            <p class="text-sm text-gray-600 mb-4">
+            <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-4">Login zur Bambu Lab Cloud</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Ihre Zugangsdaten werden sicher an das Backend gesendet und dort verarbeitet.
                 Sie werden nicht direkt im Browser gespeichert.
             </p>
@@ -111,14 +210,14 @@
         </div>
 
         <div id="verificationSection" class="hidden">
-            <h2 class="text-xl font-semibold text-gray-700 mb-4">Zwei-Faktor-Authentifizierung</h2>
-            <p class="text-sm text-gray-600 mb-4">
+            <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-4">Zwei-Faktor-Authentifizierung</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Ein Verifikationscode wurde an Ihre E-Mail-Adresse gesendet.
                 Bitte geben Sie den Code ein, um die Anmeldung abzuschließen.
             </p>
             <input type="text" id="verificationCodeInput" class="input-field" placeholder="Verifikationscode" required maxlength="6">
             <button id="verifyButton" class="button w-full">Code bestätigen</button>
-            <button id="backToLoginButton" class="button w-full mt-2" style="background-color: #64748b;">Zurück zum Login</button>
+            <button id="backToLoginButton" class="button secondary w-full mt-2">Zurück zum Login</button>
         </div>
 
         <div id="statusSection" class="hidden">
