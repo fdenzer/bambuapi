@@ -1,0 +1,42 @@
+name: Build Deployment Package
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18' # Specify a Node.js version, e.g., 18.x or 'lts/*'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Archive deployment package
+      run: |
+        mkdir deployment_package
+        cp -r ./* deployment_package/
+        rm -rf deployment_package/node_modules
+        rm -rf deployment_package/.git
+        rm -f deployment_package/.gitignore
+        # Add any other files/directories to exclude from the package if necessary
+        # For example: rm -rf deployment_package/.github
+        cd deployment_package
+        zip -r ../deployment-package.zip .
+        cd ..
+
+
+    - name: Upload deployment artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-package
+        path: deployment-package.zip

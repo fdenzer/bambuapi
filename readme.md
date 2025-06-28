@@ -157,3 +157,15 @@ fetch('http://localhost:3000/api/printer-status', {
   : Die Bambu Lab Access Tokens sind laut Dokumentation etwa 3 Monate gültig. Da der Refresh-Token-Endpunkt als "nutzlos" beschrieben wird, muss sich der Benutzer nach Ablauf des Tokens erneut anmelden. Die Session-Dauer (`maxAge` des Cookies) sollte dies widerspiegeln.
 - **Drucker-Auswahl:**
   : Das Backend ruft derzeit den Status des ersten in Ihrem Konto gefundenen Druckers ab. Wenn Sie mehrere Drucker haben, müssten Sie die Logik im Backend erweitern, um eine spezifische `dev_id` zu akzeptieren und den Status des entsprechenden Druckers zurückzugeben.
+
+## Deployment
+
+Deployment artifacts (a `deployment-package.zip` file) are automatically built by GitHub Actions whenever changes are pushed to the `main` branch. This package contains the necessary files to run the Node.js backend on a suitable hosting platform.
+
+For detailed instructions on how to deploy this backend, please refer to the [Deployment Tutorial](./deploy_tutorial.md). This tutorial covers:
+- How to download the deployment package from GitHub Actions.
+- General steps for deploying to Node.js hosting platforms (like Netlify, Heroku, VPS).
+- Configuration of required environment variables (e.g., `SESSION_SECRET`).
+- How to run the application.
+
+**Note:** This Node.js backend cannot be hosted directly on GitHub Pages, as GitHub Pages only serves static content. You will need a platform that supports running Node.js applications.
