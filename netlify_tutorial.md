@@ -64,7 +64,7 @@ This document guides you through deploying the bambuapi project to Netlify.
             *   For persistent sessions in a serverless environment, you would need to configure `express-session` with an external session store (e.g., a database service like FaunaDB, or a Redis instance). This is a more advanced setup. For now, sessions will work for a user as long as their requests are routed to the same warm function instance, but this is not guaranteed.
 
         This refactored approach is the standard way to run Express.js applications on Netlify Functions and should resolve the connectivity issues.
-        
+
 5.  **Deploy Site**: Click the "Deploy site" button. Netlify will start the build and deployment process.
 
 ## Verifying the Deployment
