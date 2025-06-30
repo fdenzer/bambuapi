@@ -1,43 +1,23 @@
 {
-  "name": "bambulab-status-app",
-  "version": "1.0.0",
-  "description": "Bambu Lab 3D Printer Status Dashboard - Deployable to Netlify",
-  "main": "netlify/functions/server.js",
-  "scripts": {
-    "start": "netlify dev",
-    "dev": "netlify dev",
-    "build": "echo 'No build step required for static files'",
-    "install": "cd netlify/functions && npm install",
-    "netlify-dev": "netlify dev",
-    "deploy": "netlify deploy",
-    "deploy-prod": "netlify deploy --prod"
-  },
-  "keywords": [
-    "bambulab",
-    "3d-printer",
-    "cloud-api",
-    "nodejs",
-    "express",
-    "status",
-    "netlify",
-    "serverless"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
   "devDependencies": {
-    "netlify-cli": "^17.0.0"
+    "@sveltejs/adapter-netlify": "^5.0.2",
+    "@sveltejs/kit": "^2.22.2",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "svelte": "^5.34.9",
+    "svelte-preprocess": "^6.0.3",
+    "tailwindcss": "^4.1.11",
+    "vite": "^6.3.5"
   },
-  "engines": {
-    "node": ">=18.0.0"
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/bambulab-status-app.git"
-  },
-  "netlify": {
-    "build": {
-      "publish": "client_static",
-      "functions": "netlify/functions"
-    }
+  "dependencies": {
+    "dotenv": "^17.0.0",
+    "node-fetch": "^3.3.2"
   }
 }
